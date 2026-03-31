@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Analysis UI</title>
+</head>
+<body>
+
+  <h1>Run Analysis</h1>
+
+  <!-- Input manual -->
+  <h3>Paste JSON</h3>
+  <textarea id="jsonInput" rows="12" cols="70">
+{
+  "data": [
+    {"outlet": "A", "subject": "X", "mention_type": "positive", "amount_of_mentions": 10}
+  ]
+}
+  </textarea>
+
+  <br><br>
+
+  <!-- Input por archivo -->
+  <h3>Or upload file</h3>
+  <input type="file" id="fileInput">
+
+  <br><br>
+
+  <button onclick="sendData()">Run Analysis</button>
+
+  <h2>Result</h2>
+  <pre id="output"></pre>
+
+  <script>
+    async function sendData() {
+      let jsonData;
+
+      const textArea = document.getElementById("jsonInput").value;
+      const fileInput = document.getElementById("fileInput");
+
+      // 1. Leer input
+      try {
+        if (fileInput.files.length > 0) {
+          const file = fileInput.files[0];
+          const text = await file.text();
+          jsonData = JSON.parse(text);
+        } else {
+          jsonData = JSON.parse(textArea);
+        }
+      } catch (err) {
+        alert("Invalid JSON");
+        return;
+      }
+
+      // 2. Llamar API
+      try {
+        const response = await fetch("/analyze", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(jsonData)
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(errText);
+        }
+
+        const result = await response.json();
+
+        // 3. Mostrar resultado
+        document.getElementById("output").textContent =
+          JSON.stringify(result, null, 2);
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById("output").textContent =
+          "Error: " + err.message;
+      }
+    }
+  </script>
+
+</body>
+</html>
