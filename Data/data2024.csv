@@ -1,0 +1,41 @@
+page_name,num_posts,Trump_positive,Trump_negative,Trump_neutral,Kamala_positive,Kamala_negative,Kamala_neutral,Vance_positive,Vance_negative,Vance_neutral,Walz_positive,Walz_negative,Walz_neutral,media_type,media_bias,bias_value,factual_reporting,factual_value,comment,country,sentiment_bias
+ConservativeNewsDly,3020,33,154,399,20,167,152,0,2,3,2,20,8,website,extreme right,,mixed,,,USA,0.04375
+NEWSMAX,2860,114,398,440,36,379,202,8,7,31,3,67,24,TV station,right,7.8,low,7.6,,USA,0.072557051
+WashingtonExaminer,2439,26,228,247,47,234,179,1,10,3,8,59,17,magazine,right-center,3.8,mostly factual,2.2,,USA,0.025495751
+NewsNationNow,1877,8,177,342,47,40,240,3,12,32,6,7,23,TV station,least biased,1.2,high,1.1,,USA,-0.196371398
+Breitbart,1552,106,198,112,8,455,32,6,9,7,1,33,2,website,right,8.1,mixed,6.4,,USA,0.39628483
+TheHill,1358,5,167,41,65,50,87,7,35,19,12,13,34,newspaper,least biased,0.4,mostly factual,2.2,,USA,-0.381308411
+nytimes,1194,4,314,98,78,31,154,0,9,7,12,3,18,newspaper,left-center,-4.1,high,1.4,,USA,-0.51510989
+ABCNews,1007,2,118,75,77,34,178,2,6,5,10,2,24,TV station,left-center,-3.3,high,1.1,,USA,-0.320825516
+FoxNews,966,18,73,43,22,188,74,6,17,9,7,62,10,TV station/website,right,6.7,mixed,6.1,,USA,0.293005671
+NBCNews,932,4,235,99,39,33,103,0,20,17,10,4,13,TV station,left-center,-3.6,high,1,,USA,-0.455805893
+NBCPolitics,898,5,174,81,47,31,110,0,18,18,8,4,19,TV station,left-center,-3.6,high,1,politics branch of NBC News (just below),USA,-0.401941748
+DailyCaller,890,16,49,23,24,253,49,19,33,5,8,84,14,website,right,6.6,mixed,5.5,,USA,0.447140381
+WSJOpinion,855,11,87,53,11,276,39,0,5,2,2,25,4,newspaper,right-center,4.2,mostly factual,2.4,opinion branch of Wall Street Journal. I used the WSJ values (row 44),USA,0.401941748
+CBSNews,849,3,138,121,52,14,97,0,9,6,7,2,27,TV station,left-center,-3.3,high,1,,USA,-0.392857143
+washingtonpost,835,0,212,93,45,25,103,0,16,7,8,8,15,newspaper,left-center,-3.6,mostly factual,2.1,,USA,-0.466165414
+BlazeMedia,824,22,79,36,6,226,23,15,19,1,1,54,3,TV station,right,7.8,mixed,6.3,owner of The Blaze (row 34),USA,0.437113402
+thedailybeast,799,5,250,40,35,70,59,1,32,2,9,15,10,website,left,-6.6,mixed,4.8,,USA,-0.445075758
+politifact,750,0,125,56,1,50,130,0,16,0,3,11,40,website,left-center,-3.1,high,1,,USA,-0.194444444
+Newsweek,741,8,163,68,49,50,83,1,10,6,3,3,13,magazine,right-center,2.8,mostly factual,2.6,,USA,-0.356673961
+TheWashingtonTimes,736,15,154,115,19,73,66,0,0,1,5,15,6,newspaper,right-center,4.2,mixed,6.4,,USA,-0.159914712
+cnnpolitics,714,5,180,105,33,23,98,0,11,2,1,3,11,TV station/website,left-center,-3.6,mostly factual,3.7,politics branch of CNN (row 39),USA,-0.411016949
+TheBlaze,709,21,66,28,8,180,19,11,16,3,1,36,6,TV station,right,7.8,mixed,6.3,,USA,0.397468354
+newsbusters,702,3,104,8,16,218,17,10,27,1,4,68,6,organization/foundation,right,,mixed,,,USA,0.307053942
+newshour,700,2,98,116,33,3,103,0,3,5,6,3,15,TV station,left-center,-2.4,high,1,,USA,-0.341085271
+TND,690,6,71,107,17,35,92,1,9,13,5,20,9,TV station/website,right-center,2.4,high,1.2,,USA,-0.103896104
+mediaite,679,1,70,21,14,78,60,5,38,11,2,22,1,website,left-center,-4.5,high,1.6,,USA,-0.055727554
+bloombergbusiness,676,7,130,106,48,35,83,0,3,1,6,2,5,TV station,left-center,-2.4,mostly factual,2.2,,USA,-0.335680751
+WesternJournal,663,12,44,49,6,202,42,0,6,6,3,39,10,website,far right,8,mixed,6.3,,USA,0.46300716
+RedStateBlog,657,9,39,9,9,280,22,13,26,1,2,73,4,website,right,,mixed,,,USA,0.613963039
+HuffPostPolitics,653,3,216,34,34,53,46,0,14,4,4,0,9,website,left,-6.4,mixed,4.6,politics branch of HuffPost (or Huffington Post) (row 105). I used those values,USA,-0.508393285
+snopes,629,13,95,40,18,69,114,0,31,19,6,71,60,website,left-center,-2.8,high,1.2,,USA,0.005597015
+blazenewsofficial,623,17,51,24,8,165,17,14,19,0,1,44,2,TV station,right,7.8,mixed,6.3,Data from The Blaze,USA,0.444751381
+forbes,617,6,170,121,14,18,43,0,4,1,0,2,2,magazine,least biased,1.3,mostly factual,2,,USA,-0.42519685
+theconservativetribune,598,17,28,21,3,237,25,2,2,5,3,37,6,website,extreme right,,very low,,,USA,0.665803109
+cnn,591,4,159,80,25,19,76,0,8,2,1,3,11,TV station/website,left-center,-3.6,mostly factual,3.7,,USA,-0.430412371
+theijr,588,22,94,73,8,131,45,1,0,2,0,18,5,website,right,6.7,mostly factual,2.9,,USA,0.175438596
+mediaresearchcenter,575,6,93,11,14,174,20,10,22,2,2,59,5,organization/foundation,right,7.1,mixed,6.3,,USA,0.282296651
+ABC7Amarillo,574,7,88,109,20,55,88,1,2,7,2,10,12,TV statopm,right-center,2.5,high,1,,USA,-0.097256858
+nowthisimpact,571,0,134,2,124,20,36,0,21,1,29,12,4,website,far left,-8.5,mixed,6.2,,USA,-0.720626632
+politico,560,1,105,54,30,25,68,1,7,3,8,1,11,website,left-center,-2.8,high,1.3,,USA,-0.388535032
