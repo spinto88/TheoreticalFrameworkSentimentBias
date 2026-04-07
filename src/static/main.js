@@ -1,30 +1,102 @@
+const fileInput = document.getElementById("fileInput");
+const dropZone  = document.getElementById("dropZone");
+const runBtn    = document.getElementById("runBtn");
+
+// ── File selection ──────────────────────────────────────────────
+fileInput.addEventListener("change", () => {
+  if (fileInput.files[0]) setFile(fileInput.files[0]);
+});
+
+function setFile(file) {
+  document.getElementById("fileName").textContent = file.name;
+  document.getElementById("dropText").innerHTML =
+    `<strong>${file.name}</strong> ready to analyse`;
+  dropZone.classList.add("has-file");
+  runBtn.disabled = false;
+  clearError();
+}
+
+// ── Drag & drop ─────────────────────────────────────────────────
+dropZone.addEventListener("dragover", e => {
+  e.preventDefault();
+  dropZone.classList.add("drag-over");
+});
+
+["dragleave", "dragend"].forEach(evt =>
+  dropZone.addEventListener(evt, () => dropZone.classList.remove("drag-over"))
+);
+
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("drag-over");
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    // transfer to the real input so sendData() can read it
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    fileInput.files = dt.files;
+    setFile(file);
+  }
+});
+
+// ── UI helpers ──────────────────────────────────────────────────
+function showError(msg) {
+  const banner = document.getElementById("errorBanner");
+  banner.textContent = msg;
+  banner.style.display = "block";
+}
+
+function clearError() {
+  document.getElementById("errorBanner").style.display = "none";
+}
+
+function toggleRaw() {
+  const el = document.getElementById("rawOutput");
+  el.style.display = el.style.display === "block" ? "none" : "block";
+}
+
+// ── Analysis ────────────────────────────────────────────────────
 async function sendData() {
+  clearError();
+
+  const file = fileInput.files[0];
+  const isCSV = file.name.toLowerCase().endsWith(".csv");
+
   let jsonData;
-
   try {
-    const fileInput = document.getElementById("fileInput");
-
-    if (fileInput.files.length > 0) {
-      const text = await fileInput.files[0].text();
-      jsonData = JSON.parse(text);
-    } else {
-      jsonData = JSON.parse(document.getElementById("jsonInput").value);
-    }
-  } catch {
-    alert("Invalid JSON");
+    const text = await file.text();
+    jsonData = isCSV ? parseCSV(text) : JSON.parse(text);
+  } catch (e) {
+    showError(`Could not parse the file — ${e.message}`);
     return;
   }
 
-  const response = await fetch("/analyze", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify(jsonData)
-  });
+  runBtn.disabled = true;
+  runBtn.textContent = "Running…";
 
-  const result = await response.json();
+  try {
+    const response = await fetch("/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(jsonData)
+    });
 
-  document.getElementById("output").textContent =
-    JSON.stringify(result, null, 2);
+    if (!response.ok) {
+      const err = await response.text();
+      showError(`Server error ${response.status}: ${err}`);
+      return;
+    }
 
-  renderAllCharts(result);
+    const result = await response.json();
+
+    document.getElementById("rawOutput").textContent = JSON.stringify(result, null, 2);
+    document.getElementById("results").style.display = "block";
+
+    renderAllCharts(result);
+  } catch (e) {
+    showError(`Request failed: ${e.message}`);
+  } finally {
+    runBtn.disabled = false;
+    runBtn.textContent = "Run Analysis";
+  }
 }

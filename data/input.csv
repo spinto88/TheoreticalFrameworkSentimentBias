@@ -1,0 +1,7 @@
+outlet,subject,mention_type,amount_of_mentions
+A,X,positive,12
+A,Y,negative,5
+B,X,neutral,8
+B,Y,positive,7
+C,X,negative,4
+C,X,positive,6
