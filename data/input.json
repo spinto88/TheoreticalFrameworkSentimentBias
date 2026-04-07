@@ -1,0 +1,40 @@
+{
+  "data": [
+    {
+      "outlet": "A",
+      "subject": "X",
+      "mention_type": "positive",
+      "amount_of_mentions": 12
+    },
+    {
+      "outlet": "A",
+      "subject": "Y",
+      "mention_type": "negative",
+      "amount_of_mentions": 5
+    },
+    {
+      "outlet": "B",
+      "subject": "X",
+      "mention_type": "neutral",
+      "amount_of_mentions": 8
+    },
+    {
+      "outlet": "B",
+      "subject": "Y",
+      "mention_type": "positive",
+      "amount_of_mentions": 7
+    },
+    {
+      "outlet": "C",
+      "subject": "X",
+      "mention_type": "negative",
+      "amount_of_mentions": 4
+    },
+    {
+      "outlet": "C",
+      "subject": "X",
+      "mention_type": "positive",
+      "amount_of_mentions": 6
+    }
+  ]
+}

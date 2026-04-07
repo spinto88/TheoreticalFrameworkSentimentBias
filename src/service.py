@@ -200,5 +200,5 @@ def run_analysis(data: List[Mention]) -> AnalysisOutput:
 
 
 if __name__ == "__main__":
-    input_data = json.load(open("../input.json", "r"))
+    input_data = json.load(open("data/input.json", "r"))
     print(run_analysis(input_data["data"]))
