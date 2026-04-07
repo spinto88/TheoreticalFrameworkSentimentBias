@@ -31,7 +31,8 @@ function renderChartZ(outlets) {
   let values = outlets.map(o => o.z);
   ({ labels, values } = sortByValue(labels, values));
   chartZ = createBarChart("chartZ", chartZ, labels, values, "Outlet Bias (z)", "z",
-    { x: "Media Outlet", y: "Bias Score (z)" });
+    { x: "Media Outlet", y: "Bias Score (z)" },
+    { maxRotation: 90, minRotation: 90, autoSkip: false });
 }
 
 function renderChartA(subjects) {
