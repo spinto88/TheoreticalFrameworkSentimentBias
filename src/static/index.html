@@ -373,7 +373,7 @@
               <button class="btn-export" onclick="exportChartSVG(chartZ,'outlet-bias-z')">SVG</button>
             </div>
           </div>
-          <p class="chart-desc">Latent ideological score per media outlet. Positive values indicate a positive bias; negative values indicate a negative bias.</p>
+          <p class="chart-desc">Latent score for each media outlet. The sign of <em>z</em> has no standalone meaning — what matters is its product with the subject's discrimination parameter <em>a</em>: if <em>z·a &gt; 0</em> the outlet reinforces positive sentiment toward that subject; if <em>z·a &lt; 0</em> it reinforces negative sentiment.</p>
           <div class="chart-wrap"><canvas id="chartZ"></canvas></div>
         </div>
 
@@ -388,7 +388,7 @@
               <button class="btn-export" onclick="exportChartSVG(chartA,'subject-discrimination-a')">SVG</button>
             </div>
           </div>
-          <p class="chart-desc">How strongly outlets differentiate their sentiment when covering this subject. Higher values indicate stronger polarisation.</p>
+          <p class="chart-desc">Discrimination parameter for each subject. Like <em>z</em>, the sign of <em>a</em> is only meaningful in combination with an outlet's score: the product <em>z·a</em> determines the direction of reinforcement — positive means the outlet tends to cover the subject favourably, negative means unfavourably. Larger absolute values of <em>a</em> amplify this effect.</p>
           <div class="chart-wrap"><canvas id="chartA"></canvas></div>
         </div>
 
@@ -403,7 +403,7 @@
               <button class="btn-export" onclick="exportChartSVG(chartB,'subject-baseline-b')">SVG</button>
             </div>
           </div>
-          <p class="chart-desc">Baseline sentiment associated with each subject, independent of outlet bias. Reflects overall media sentiment regardless of source.</p>
+          <p class="chart-desc">Baseline sentiment for each subject, independent of which outlet covers it. A positive <em>b</em> indicates a general tendency across all outlets to mention this subject positively; a negative <em>b</em> indicates an overall negative tendency.</p>
           <div class="chart-wrap"><canvas id="chartB"></canvas></div>
         </div>
 
