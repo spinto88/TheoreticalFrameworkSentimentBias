@@ -1,3 +1,35 @@
+// ── CSV parser ──────────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) throw new Error("CSV must have a header row and at least one data row.");
+
+  const headers = lines[0].split(",").map(h => h.trim());
+
+  const REQUIRED = ["outlet", "subject", "mention_type", "amount_of_mentions"];
+  for (const col of REQUIRED) {
+    if (!headers.includes(col))
+      throw new Error(`Missing required CSV column: "${col}"`);
+  }
+
+  const data = lines.slice(1).map((line, idx) => {
+    const values = line.split(",").map(v => v.trim());
+    if (values.length !== headers.length)
+      throw new Error(`Row ${idx + 2} has ${values.length} columns, expected ${headers.length}.`);
+
+    const row = {};
+    headers.forEach((h, i) => { row[h] = values[i]; });
+
+    const amount = parseInt(row.amount_of_mentions, 10);
+    if (isNaN(amount))
+      throw new Error(`Row ${idx + 2}: "amount_of_mentions" must be an integer, got "${row.amount_of_mentions}".`);
+    row.amount_of_mentions = amount;
+
+    return row;
+  });
+
+  return { data };
+}
+
 const COLORS = {
   z: { pos: "rgba(99,102,241,0.85)",  neg: "rgba(239,68,68,0.75)",  border_pos: "#6366f1", border_neg: "#ef4444" },
   a: { pos: "rgba(16,185,129,0.85)",  neg: "rgba(239,68,68,0.75)",  border_pos: "#10b981", border_neg: "#ef4444" },

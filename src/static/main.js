@@ -59,12 +59,15 @@ function toggleRaw() {
 async function sendData() {
   clearError();
 
+  const file = fileInput.files[0];
+  const isCSV = file.name.toLowerCase().endsWith(".csv");
+
   let jsonData;
   try {
-    const text = await fileInput.files[0].text();
-    jsonData = JSON.parse(text);
-  } catch {
-    showError("Could not parse the file — make sure it is valid JSON.");
+    const text = await file.text();
+    jsonData = isCSV ? parseCSV(text) : JSON.parse(text);
+  } catch (e) {
+    showError(`Could not parse the file — ${e.message}`);
     return;
   }
 

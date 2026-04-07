@@ -264,10 +264,15 @@
           <line x1="12" y1="3" x2="12" y2="15"/>
         </svg>
         <p id="dropText"><strong>Click to upload</strong> or drag &amp; drop your file here</p>
-        <p style="margin-top:6px;font-size:0.78rem;">Accepts <code style="color:var(--accent);background:rgba(99,102,241,0.1);padding:1px 6px;border-radius:4px;">input.json</code></p>
+        <p style="margin-top:6px;font-size:0.78rem;">
+          Accepts
+          <code style="color:var(--accent);background:rgba(99,102,241,0.1);padding:1px 6px;border-radius:4px;">input.json</code>
+          &nbsp;or&nbsp;
+          <code style="color:var(--accent-3);background:rgba(245,158,11,0.1);padding:1px 6px;border-radius:4px;">input.csv</code>
+        </p>
         <span id="fileName"></span>
       </div>
-      <input type="file" id="fileInput" accept=".json">
+      <input type="file" id="fileInput" accept=".json,.csv">
 
       <div class="input-row">
         <button class="btn btn-primary" id="runBtn" onclick="sendData()" disabled>Run Analysis</button>
