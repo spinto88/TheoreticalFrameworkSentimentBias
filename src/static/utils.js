@@ -1,16 +1,18 @@
 // ── PNG export ──────────────────────────────────────────────────
+// Exports at 2× the canvas pixel size for crisp print/presentation quality.
 function exportChartPNG(canvasId, filename) {
-  const src = document.getElementById(canvasId);
-  const out = document.createElement("canvas");
-  out.width  = src.width;
-  out.height = src.height;
-  const ctx = out.getContext("2d");
-  ctx.fillStyle = "#1a1d27";
+  const src   = document.getElementById(canvasId);
+  const SCALE = 2;
+  const out   = document.createElement("canvas");
+  out.width   = src.width  * SCALE;
+  out.height  = src.height * SCALE;
+  const ctx   = out.getContext("2d");
+  ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, out.width, out.height);
-  ctx.drawImage(src, 0, 0);
-  const link = document.createElement("a");
+  ctx.drawImage(src, 0, 0, out.width, out.height);
+  const link  = document.createElement("a");
   link.download = filename + ".png";
-  link.href = out.toDataURL("image/png");
+  link.href   = out.toDataURL("image/png");
   link.click();
 }
 
@@ -57,60 +59,33 @@ function parseCSV(text) {
   return { data };
 }
 
+// ── Chart colours ───────────────────────────────────────────────
 const COLORS = {
-  z: { pos: "rgba(99,102,241,0.85)",  neg: "rgba(239,68,68,0.75)",  border_pos: "#6366f1", border_neg: "#ef4444" },
-  a: { pos: "rgba(16,185,129,0.85)",  neg: "rgba(239,68,68,0.75)",  border_pos: "#10b981", border_neg: "#ef4444" },
-  b: { pos: "rgba(245,158,11,0.85)",  neg: "rgba(239,68,68,0.75)",  border_pos: "#f59e0b", border_neg: "#ef4444" },
-};
-
-const CHART_DEFAULTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  animation: { duration: 500, easing: "easeOutQuart" },
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      backgroundColor: "#1a1d27",
-      borderColor: "#2a2d3a",
-      borderWidth: 1,
-      titleColor: "#e2e4ed",
-      bodyColor: "#9ca3af",
-      padding: 12,
-      callbacks: {
-        label: ctx => `  ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(4)}`
-      }
-    }
-  },
-  scales: {
-    x: {
-      grid: { color: "rgba(255,255,255,0.04)" },
-      ticks: { color: "#6b7280", font: { size: 12 } },
-      border: { color: "#2a2d3a" }
-    },
-    y: {
-      grid: { color: "rgba(255,255,255,0.06)" },
-      ticks: { color: "#6b7280", font: { size: 11 }, maxTicksLimit: 7 },
-      border: { color: "#2a2d3a" }
-    }
-  }
+  z: { pos: "rgba(99,102,241,0.80)",  neg: "rgba(239,68,68,0.70)",  border_pos: "#6366f1", border_neg: "#ef4444" },
+  a: { pos: "rgba(16,185,129,0.80)",  neg: "rgba(239,68,68,0.70)",  border_pos: "#10b981", border_neg: "#ef4444" },
+  b: { pos: "rgba(245,158,11,0.80)",  neg: "rgba(239,68,68,0.70)",  border_pos: "#f59e0b", border_neg: "#ef4444" },
 };
 
 function barColors(values, palette) {
-  return values.map(v =>
-    v >= 0 ? palette.pos : palette.neg
-  );
+  return values.map(v => v >= 0 ? palette.pos : palette.neg);
 }
 
 function borderColors(values, palette) {
-  return values.map(v =>
-    v >= 0 ? palette.border_pos : palette.border_neg
-  );
+  return values.map(v => v >= 0 ? palette.border_pos : palette.border_neg);
 }
 
-function createBarChart(canvasId, chartRef, labels, values, label, paletteKey) {
+// ── Chart factory ───────────────────────────────────────────────
+// axisLabels: { x: string, y: string }
+function createBarChart(canvasId, chartRef, labels, values, label, paletteKey, axisLabels) {
   if (chartRef) chartRef.destroy();
 
   const palette = COLORS[paletteKey] || COLORS.z;
+
+  const axisTitleStyle = {
+    display: true,
+    color: "#374151",
+    font: { size: 13, weight: "600", family: "'Inter', system-ui, sans-serif" },
+  };
 
   return new Chart(document.getElementById(canvasId), {
     type: "bar",
@@ -122,16 +97,42 @@ function createBarChart(canvasId, chartRef, labels, values, label, paletteKey) {
         backgroundColor: barColors(values, palette),
         borderColor: borderColors(values, palette),
         borderWidth: 1.5,
-        borderRadius: 6,
+        borderRadius: 7,
         borderSkipped: false,
       }]
     },
     options: {
-      ...CHART_DEFAULTS,
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 500, easing: "easeOutQuart" },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#1e293b",
+          borderColor: "#334155",
+          borderWidth: 1,
+          titleColor: "#f1f5f9",
+          bodyColor:  "#94a3b8",
+          padding: 13,
+          titleFont: { size: 13, weight: "600" },
+          bodyFont:  { size: 13 },
+          callbacks: {
+            label: ctx => `  ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(4)}`
+          }
+        }
+      },
       scales: {
-        ...CHART_DEFAULTS.scales,
+        x: {
+          grid:   { color: "rgba(0,0,0,0.06)" },
+          border: { color: "#d1d5db" },
+          ticks:  { color: "#4b5563", font: { size: 14 }, padding: 6 },
+          title:  { ...axisTitleStyle, text: axisLabels?.x ?? "" },
+        },
         y: {
-          ...CHART_DEFAULTS.scales.y,
+          grid:   { color: "rgba(0,0,0,0.06)" },
+          border: { color: "#d1d5db" },
+          ticks:  { color: "#4b5563", font: { size: 13 }, maxTicksLimit: 7, padding: 6 },
+          title:  { ...axisTitleStyle, text: axisLabels?.y ?? "" },
           afterDataLimits(axis) {
             const pad = (axis.max - axis.min) * 0.12 || 0.5;
             axis.max += pad;
