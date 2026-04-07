@@ -1,5 +1,16 @@
 let chartZ, chartA, chartB;
 
+function exportAllChartsSVG() {
+  const charts = [
+    [() => chartZ, "outlet-bias-z"],
+    [() => chartA, "subject-discrimination-a"],
+    [() => chartB, "subject-baseline-b"],
+  ];
+  charts.forEach(([getRef, name], i) =>
+    setTimeout(() => exportChartSVG(getRef(), name), i * 250)
+  );
+}
+
 function renderAllCharts(data) {
   renderChartZ(data.outlets);
   renderChartA(data.subjects);

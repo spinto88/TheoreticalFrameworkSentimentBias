@@ -211,6 +211,37 @@
       background: rgba(99,102,241,0.08);
     }
 
+    .export-group {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .btn-export {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      background: none;
+      border: none;
+      border-left: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .btn-export:first-child { border-left: none; }
+
+    .btn-export:hover {
+      background: rgba(99,102,241,0.08);
+      color: var(--text);
+    }
+
     .chart-title {
       font-size: 1rem;
       font-weight: 600;
@@ -314,12 +345,18 @@
 
     <!-- Results -->
     <div id="results">
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
         <button class="raw-toggle" style="margin-bottom:0" onclick="toggleRaw()">Show / Hide raw JSON</button>
-        <button class="raw-toggle" style="margin-bottom:0" onclick="exportAllCharts()">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:5px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Export all charts
-        </button>
+        <div class="export-group">
+          <button class="btn-export" onclick="exportAllCharts()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            All PNG
+          </button>
+          <button class="btn-export" onclick="exportAllChartsSVG()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            All SVG
+          </button>
+        </div>
       </div>
       <pre id="rawOutput"></pre>
 
@@ -331,9 +368,10 @@
               <span class="chart-title">Outlet Bias</span>
               <span class="chart-badge badge-z">z</span>
             </div>
-            <button class="btn-icon" title="Export as PNG" onclick="exportChartPNG('chartZ','outlet-bias-z')">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            </button>
+            <div class="export-group">
+              <button class="btn-export" onclick="exportChartPNG('chartZ','outlet-bias-z')">PNG</button>
+              <button class="btn-export" onclick="exportChartSVG(chartZ,'outlet-bias-z')">SVG</button>
+            </div>
           </div>
           <p class="chart-desc">Latent ideological score per media outlet. Positive values indicate a positive bias; negative values indicate a negative bias.</p>
           <div class="chart-wrap"><canvas id="chartZ"></canvas></div>
@@ -345,9 +383,10 @@
               <span class="chart-title">Subject Discrimination</span>
               <span class="chart-badge badge-a">a</span>
             </div>
-            <button class="btn-icon" title="Export as PNG" onclick="exportChartPNG('chartA','subject-discrimination-a')">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            </button>
+            <div class="export-group">
+              <button class="btn-export" onclick="exportChartPNG('chartA','subject-discrimination-a')">PNG</button>
+              <button class="btn-export" onclick="exportChartSVG(chartA,'subject-discrimination-a')">SVG</button>
+            </div>
           </div>
           <p class="chart-desc">How strongly outlets differentiate their sentiment when covering this subject. Higher values indicate stronger polarisation.</p>
           <div class="chart-wrap"><canvas id="chartA"></canvas></div>
@@ -359,9 +398,10 @@
               <span class="chart-title">Subject Baseline</span>
               <span class="chart-badge badge-b">b</span>
             </div>
-            <button class="btn-icon" title="Export as PNG" onclick="exportChartPNG('chartB','subject-baseline-b')">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            </button>
+            <div class="export-group">
+              <button class="btn-export" onclick="exportChartPNG('chartB','subject-baseline-b')">PNG</button>
+              <button class="btn-export" onclick="exportChartSVG(chartB,'subject-baseline-b')">SVG</button>
+            </div>
           </div>
           <p class="chart-desc">Baseline sentiment associated with each subject, independent of outlet bias. Reflects overall media sentiment regardless of source.</p>
           <div class="chart-wrap"><canvas id="chartB"></canvas></div>
