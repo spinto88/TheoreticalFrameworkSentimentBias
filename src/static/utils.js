@@ -190,8 +190,9 @@ function borderColors(values, palette) {
 }
 
 // ── Chart factory ───────────────────────────────────────────────
-// axisLabels: { x: string, y: string }
-function createBarChart(canvasId, chartRef, labels, values, label, paletteKey, axisLabels) {
+// axisLabels:  { x: string, y: string }
+// xTickOptions: extra Chart.js tick options merged into x.ticks (e.g. rotation)
+function createBarChart(canvasId, chartRef, labels, values, label, paletteKey, axisLabels, xTickOptions = {}) {
   if (chartRef) chartRef.destroy();
 
   const palette = COLORS[paletteKey] || COLORS.z;
@@ -240,7 +241,7 @@ function createBarChart(canvasId, chartRef, labels, values, label, paletteKey, a
         x: {
           grid:   { color: "rgba(0,0,0,0.06)" },
           border: { color: "#d1d5db" },
-          ticks:  { color: "#4b5563", font: { size: 14 }, padding: 6 },
+          ticks:  { color: "#4b5563", font: { size: 14 }, padding: 6, ...xTickOptions },
           title:  { ...axisTitleStyle, text: axisLabels?.x ?? "" },
         },
         y: {

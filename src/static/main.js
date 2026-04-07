@@ -31,7 +31,6 @@ dropZone.addEventListener("drop", e => {
   dropZone.classList.remove("drag-over");
   const file = e.dataTransfer.files[0];
   if (file) {
-    // transfer to the real input so sendData() can read it
     const dt = new DataTransfer();
     dt.items.add(file);
     fileInput.files = dt.files;
@@ -55,11 +54,52 @@ function toggleRaw() {
   el.style.display = el.style.display === "block" ? "none" : "block";
 }
 
+// ── Processing time estimate ─────────────────────────────────────
+// Rough heuristic based on differential_evolution cost: O(m · k · (m + 2k))
+// with popsize=25 and maxiter=1000.
+function estimateSeconds(data) {
+  const m = new Set(data.map(r => r.outlet)).size;
+  const k = new Set(data.map(r => r.subject)).size;
+  return Math.max(2, Math.round(0.005 * m * k * (m + 2 * k)));
+}
+
+let _timerInterval = null;
+let _startTime     = null;
+
+function startProgress(estimateSec) {
+  _startTime = Date.now();
+  const section = document.getElementById("progressSection");
+  section.style.display = "block";
+  document.getElementById("progressEstimate").textContent =
+    `~${estimateSec}s estimated`;
+
+  _timerInterval = setInterval(() => {
+    const elapsed = (Date.now() - _startTime) / 1000;
+    document.getElementById("progressElapsed").textContent =
+      `${elapsed.toFixed(1)}s elapsed`;
+    const pct = Math.min(94, (elapsed / estimateSec) * 100);
+    document.getElementById("progressFill").style.width = pct + "%";
+  }, 100);
+}
+
+function stopProgress() {
+  clearInterval(_timerInterval);
+  _timerInterval = null;
+  const elapsed = ((Date.now() - _startTime) / 1000).toFixed(1);
+  document.getElementById("progressElapsed").textContent =
+    `Completed in ${elapsed}s`;
+  document.getElementById("progressEstimate").textContent = "";
+  document.getElementById("progressFill").style.width = "100%";
+  setTimeout(() => {
+    document.getElementById("progressSection").style.display = "none";
+  }, 2500);
+}
+
 // ── Analysis ────────────────────────────────────────────────────
 async function sendData() {
   clearError();
 
-  const file = fileInput.files[0];
+  const file  = fileInput.files[0];
   const isCSV = file.name.toLowerCase().endsWith(".csv");
 
   let jsonData;
@@ -71,8 +111,9 @@ async function sendData() {
     return;
   }
 
-  runBtn.disabled = true;
+  runBtn.disabled    = true;
   runBtn.textContent = "Running…";
+  startProgress(estimateSeconds(jsonData.data));
 
   try {
     const response = await fetch("/analyze", {
@@ -96,7 +137,8 @@ async function sendData() {
   } catch (e) {
     showError(`Request failed: ${e.message}`);
   } finally {
-    runBtn.disabled = false;
+    stopProgress();
+    runBtn.disabled    = false;
     runBtn.textContent = "Run Analysis";
   }
 }

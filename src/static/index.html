@@ -152,6 +152,43 @@
       cursor: not-allowed;
     }
 
+    #progressSection {
+      display: none;
+      margin-top: 18px;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+      font-size: 0.8rem;
+    }
+
+    #progressElapsed {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    #progressEstimate {
+      color: var(--muted);
+    }
+
+    .progress-track {
+      height: 6px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    #progressFill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), #818cf8);
+      border-radius: 99px;
+      transition: width 0.12s linear;
+    }
+
     #errorBanner {
       display: none;
       background: rgba(239,68,68,0.1);
@@ -340,6 +377,16 @@
         <button class="btn btn-primary" id="runBtn" onclick="sendData()" disabled>Run Analysis</button>
       </div>
 
+      <div id="progressSection">
+        <div class="progress-header">
+          <span id="progressElapsed">0.0s elapsed</span>
+          <span id="progressEstimate"></span>
+        </div>
+        <div class="progress-track">
+          <div id="progressFill"></div>
+        </div>
+      </div>
+
       <div id="errorBanner"></div>
     </div>
 
@@ -374,7 +421,7 @@
             </div>
           </div>
           <p class="chart-desc">Latent score for each media outlet. The sign of <em>z</em> has no standalone meaning — what matters is its product with the subject's discrimination parameter <em>a</em>: if <em>z·a &gt; 0</em> the outlet reinforces positive sentiment toward that subject; if <em>z·a &lt; 0</em> it reinforces negative sentiment.</p>
-          <div class="chart-wrap"><canvas id="chartZ"></canvas></div>
+          <div class="chart-wrap" style="height:380px"><canvas id="chartZ"></canvas></div>
         </div>
 
         <div class="chart-card">
