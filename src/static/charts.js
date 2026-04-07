@@ -1,31 +1,25 @@
-let outletChart, subjectChart, biasChart;
+let chartZ, chartA, chartB;
 
 function renderAllCharts(data) {
-  renderOutletChart(data.outlets);
-  renderSubjectChart(data.subjects);
-  renderBiasChart(data.subjects);
+  renderChartZ(data.outlets);
+  renderChartA(data.subjects);
+  renderChartB(data.subjects);
 }
 
-// ---- OUTLETS ----
-function renderOutletChart(outlets) {
+function renderChartZ(outlets) {
   const labels = outlets.map(o => o.outlet);
   const values = outlets.map(o => o.z);
-
-  outletChart = createBarChart("outletChart", outletChart, labels, values, "Outlet Score (z)");
+  chartZ = createBarChart("chartZ", chartZ, labels, values, "Outlet Bias (z)", "z");
 }
 
-// ---- SUBJECTS ----
-function renderSubjectChart(subjects) {
+function renderChartA(subjects) {
   const labels = subjects.map(s => s.subject);
   const values = subjects.map(s => s.a);
-
-  subjectChart = createBarChart("subjectChart", subjectChart, labels, values, "Subject Score (a)");
+  chartA = createBarChart("chartA", chartA, labels, values, "Discrimination (a)", "a");
 }
 
-// ---- BIAS ----
-function renderBiasChart(subjects) {
+function renderChartB(subjects) {
   const labels = subjects.map(s => s.subject);
-  const values = subjects.map(s => s.a - s.b);
-
-  biasChart = createBarChart("biasChart", biasChart, labels, values, "Bias (a - b)");
+  const values = subjects.map(s => s.b);
+  chartB = createBarChart("chartB", chartB, labels, values, "Baseline (b)", "b");
 }
