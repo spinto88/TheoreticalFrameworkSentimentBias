@@ -1,3 +1,30 @@
+// ── PNG export ──────────────────────────────────────────────────
+function exportChartPNG(canvasId, filename) {
+  const src = document.getElementById(canvasId);
+  const out = document.createElement("canvas");
+  out.width  = src.width;
+  out.height = src.height;
+  const ctx = out.getContext("2d");
+  ctx.fillStyle = "#1a1d27";
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(src, 0, 0);
+  const link = document.createElement("a");
+  link.download = filename + ".png";
+  link.href = out.toDataURL("image/png");
+  link.click();
+}
+
+function exportAllCharts() {
+  const charts = [
+    ["chartZ", "outlet-bias-z"],
+    ["chartA", "subject-discrimination-a"],
+    ["chartB", "subject-baseline-b"],
+  ];
+  charts.forEach(([id, name], i) =>
+    setTimeout(() => exportChartPNG(id, name), i * 250)
+  );
+}
+
 // ── CSV parser ──────────────────────────────────────────────────
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
