@@ -133,8 +133,8 @@ class TestBuildOutput:
     def test_outlet_names_match(self):
         outlets = ["A", "B", "C"]
         subjects = ["X"]
-        z = np.array([1.0, -0.5, 0.2])
-        a = np.array([0.8])
+        z = np.array([[1.0], [-0.5], [0.2]])   # shape (3, 1)
+        a = np.array([[0.8]])                   # shape (1, 1)
         b = np.array([-0.3])
         result = build_output(outlets, subjects, z, a, b)
         assert [o.outlet for o in result.outlets] == outlets
@@ -142,39 +142,53 @@ class TestBuildOutput:
     def test_subject_names_match(self):
         outlets = ["A"]
         subjects = ["P", "Q"]
-        z = np.array([0.5])
-        a = np.array([1.0, -1.0])
-        b = np.array([0.1,  0.2])
+        z = np.array([[0.5]])                    # shape (1, 1)
+        a = np.array([[1.0], [-1.0]])            # shape (2, 1)
+        b = np.array([0.1, 0.2])
         result = build_output(outlets, subjects, z, a, b)
         assert [s.subject for s in result.subjects] == subjects
 
     def test_z_values_assigned_correctly(self):
         outlets = ["A", "B"]
-        z = np.array([2.5, -1.1])
-        result = build_output(outlets, ["X"], z, np.array([0.0]), np.array([0.0]))
-        assert result.outlets[0].z == pytest.approx(2.5)
-        assert result.outlets[1].z == pytest.approx(-1.1)
+        z = np.array([[2.5], [-1.1]])            # shape (2, 1)
+        result = build_output(outlets, ["X"], z, np.array([[0.0]]), np.array([0.0]))
+        assert result.outlets[0].z == pytest.approx([2.5])
+        assert result.outlets[1].z == pytest.approx([-1.1])
 
     def test_a_b_values_assigned_correctly(self):
         subjects = ["X", "Y"]
-        a = np.array([0.7, -0.3])
-        b = np.array([1.2,  0.4])
-        result = build_output(["A"], subjects, np.array([0.0]), a, b)
-        assert result.subjects[0].a == pytest.approx(0.7)
+        a = np.array([[0.7], [-0.3]])            # shape (2, 1)
+        b = np.array([1.2, 0.4])
+        result = build_output(["A"], subjects, np.array([[0.0]]), a, b)
+        assert result.subjects[0].a == pytest.approx([0.7])
         assert result.subjects[0].b == pytest.approx(1.2)
-        assert result.subjects[1].a == pytest.approx(-0.3)
+        assert result.subjects[1].a == pytest.approx([-0.3])
         assert result.subjects[1].b == pytest.approx(0.4)
 
     def test_returns_analysis_output_instance(self):
-        result = build_output(["A"], ["X"], np.array([0.0]), np.array([0.0]), np.array([0.0]))
+        result = build_output(["A"], ["X"], np.array([[0.0]]), np.array([[0.0]]), np.array([0.0]))
         assert isinstance(result, AnalysisOutput)
 
     def test_z_values_are_python_floats(self):
-        """Ensure numpy scalars are converted to plain Python floats."""
-        result = build_output(["A"], ["X"], np.array([1.0]), np.array([0.5]), np.array([-0.5]))
-        assert type(result.outlets[0].z) is float
-        assert type(result.subjects[0].a) is float
+        """Ensure numpy values are converted to plain Python floats."""
+        result = build_output(["A"], ["X"], np.array([[1.0]]), np.array([[0.5]]), np.array([-0.5]))
+        assert isinstance(result.outlets[0].z, list)
+        assert all(type(v) is float for v in result.outlets[0].z)
+        assert isinstance(result.subjects[0].a, list)
+        assert all(type(v) is float for v in result.subjects[0].a)
         assert type(result.subjects[0].b) is float
+
+    def test_multidimensional_z_and_a(self):
+        """D=2: each outlet has a 2-component bias vector."""
+        outlets = ["A", "B"]
+        subjects = ["X"]
+        z = np.array([[1.0, 0.5], [-0.5, 0.3]])   # shape (2, 2)
+        a = np.array([[0.8, -0.2]])                # shape (1, 2)
+        b = np.array([0.1])
+        result = build_output(outlets, subjects, z, a, b)
+        assert result.outlets[0].z == pytest.approx([1.0, 0.5])
+        assert result.outlets[1].z == pytest.approx([-0.5, 0.3])
+        assert result.subjects[0].a == pytest.approx([0.8, -0.2])
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +228,21 @@ class TestLogLikelihood:
         matrix = np.zeros((2, 2, 3), dtype=np.int64)
         x = np.zeros(6)   # z_0, z_1, a_0, a_1, b_0, b_1
         assert np.isfinite(log_likelihood(x, matrix))
+
+    def test_multidimensional_returns_finite(self, small_matrix):
+        """D=2: m=2, k=1 → 2*2 + 1*2 + 1 = 7 parameters."""
+        x = np.zeros(7)
+        result = log_likelihood(x, small_matrix, D=2)
+        assert isinstance(result, float)
+        assert np.isfinite(result)
+
+    def test_multidimensional_dot_product(self, small_matrix):
+        """Dot product z_i · a_j must equal scalar product when D=1."""
+        x_scalar = np.array([0.5, -0.5, 1.0, 0.2])   # D=1: m=2,k=1 → 4 params
+        x_vector = np.array([0.5, -0.5, 1.0, 0.2])   # identical layout for D=1
+        assert log_likelihood(x_scalar, small_matrix, D=1) == pytest.approx(
+            log_likelihood(x_vector, small_matrix, D=1)
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -291,9 +320,9 @@ class TestRunAnalysis:
         mock_de.return_value = mock
         result = run_analysis(data)
         for o in result.outlets:
-            assert -5.0 <= o.z <= 5.0
+            assert all(-5.0 <= zi <= 5.0 for zi in o.z)
         for s in result.subjects:
-            assert -5.0 <= s.a <= 5.0
+            assert all(-5.0 <= ai <= 5.0 for ai in s.a)
             assert -5.0 <= s.b <= 5.0
 
     @patch("src.service.differential_evolution")

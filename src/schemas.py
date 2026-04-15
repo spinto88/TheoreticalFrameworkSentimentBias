@@ -34,23 +34,28 @@ class AnalysisInput(BaseModel):
         data: One or more mention observations.  Multiple rows may share
             the same (outlet, subject, mention_type) triple — their
             counts will be summed when building the mention tensor.
+        n_dimensions: Dimensionality *D* of the latent space.  Each outlet
+            bias vector ``z_i`` and each subject discrimination vector
+            ``a_j`` will have this many components.  Defaults to 1,
+            which recovers the original scalar model.
     """
 
     data: List[Mention]
+    n_dimensions: int = Field(1, ge=1)
 
 
 class OutletScore(BaseModel):
-    """Estimated bias score for a single media outlet.
+    """Estimated bias vector for a single media outlet.
 
     Attributes:
         outlet: Outlet name as provided in the input.
-        z: Latent bias score.  Positive values indicate a tendency to
-            cover subjects positively; negative values indicate a
-            negative tendency.
+        z: Latent bias vector of length *D*.  In the 1-D case a positive
+            value indicates a tendency to cover subjects positively and a
+            negative value indicates the opposite.
     """
 
     outlet: str
-    z: float
+    z: List[float]
 
 
 class SubjectScore(BaseModel):
@@ -58,15 +63,15 @@ class SubjectScore(BaseModel):
 
     Attributes:
         subject: Subject name as provided in the input.
-        a: Discrimination parameter.  Higher absolute values indicate
-            that outlet bias has a stronger effect when this subject is
-            being covered.
+        a: Discrimination vector of length *D*.  The log-odds contribution
+            of outlet bias for this subject is the dot product
+            ``z_i · a_j``.
         b: Baseline sentiment parameter.  Reflects the overall media
             sentiment toward this subject, independent of outlet bias.
     """
 
     subject: str
-    a: float
+    a: List[float]
     b: float
 
 

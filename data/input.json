@@ -36,5 +36,6 @@
       "mention_type": "positive",
       "amount_of_mentions": 6
     }
-  ]
+  ],
+  "n_dimensions": 2
 }

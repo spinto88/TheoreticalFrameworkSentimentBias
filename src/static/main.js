@@ -2,18 +2,51 @@ const fileInput = document.getElementById("fileInput");
 const dropZone  = document.getElementById("dropZone");
 const runBtn    = document.getElementById("runBtn");
 
+let _currentDim = 1;
+let _fileType   = "input"; // "input" | "results"
+
+function setDim(d) {
+  _currentDim = d;
+  document.querySelectorAll(".dim-pill").forEach(btn => {
+    btn.classList.toggle("active", parseInt(btn.dataset.dim) === d);
+  });
+}
+
 // ── File selection ──────────────────────────────────────────────
 fileInput.addEventListener("change", () => {
   if (fileInput.files[0]) setFile(fileInput.files[0]);
 });
 
-function setFile(file) {
+async function setFile(file) {
+  clearError();
+
+  // Detect whether this is a pre-computed results JSON
+  _fileType = "input";
+  if (!file.name.toLowerCase().endsWith(".csv")) {
+    try {
+      const text = await file.text();
+      const obj  = JSON.parse(text);
+      if (obj.outlets && obj.subjects && Array.isArray(obj.outlets)) {
+        _fileType = "results";
+      }
+    } catch {
+      // treat as input data
+    }
+  }
+
+  if (_fileType === "results") {
+    document.getElementById("dropText").innerHTML =
+      `<strong>${file.name}</strong> — results file detected`;
+    runBtn.textContent = "Load Results";
+  } else {
+    document.getElementById("dropText").innerHTML =
+      `<strong>${file.name}</strong> ready to analyse`;
+    runBtn.textContent = "Run Analysis";
+  }
+
   document.getElementById("fileName").textContent = file.name;
-  document.getElementById("dropText").innerHTML =
-    `<strong>${file.name}</strong> ready to analyse`;
   dropZone.classList.add("has-file");
   runBtn.disabled = false;
-  clearError();
 }
 
 // ── Drag & drop ─────────────────────────────────────────────────
@@ -102,14 +135,28 @@ async function sendData() {
   const file  = fileInput.files[0];
   const isCSV = file.name.toLowerCase().endsWith(".csv");
 
-  let jsonData;
+  let parsed;
   try {
     const text = await file.text();
-    jsonData = isCSV ? parseCSV(text) : JSON.parse(text);
+    parsed = isCSV ? parseCSV(text) : JSON.parse(text);
   } catch (e) {
     showError(`Could not parse the file — ${e.message}`);
     return;
   }
+
+  // ── Direct results load ────────────────────────────────────────
+  if (_fileType === "results") {
+    const nDims = parsed.outlets?.[0]?.z?.length ?? 1;
+    setDim(nDims);
+    document.getElementById("rawOutput").textContent = JSON.stringify(parsed, null, 2);
+    document.getElementById("results").style.display = "block";
+    renderAllCharts(parsed, nDims);
+    return;
+  }
+
+  // ── Run analysis via API ───────────────────────────────────────
+  // Always use the UI-selected dimension; strip any n_dimensions from the file.
+  const jsonData = { data: parsed.data, n_dimensions: _currentDim };
 
   runBtn.disabled    = true;
   runBtn.textContent = "Running…";
@@ -133,7 +180,7 @@ async function sendData() {
     document.getElementById("rawOutput").textContent = JSON.stringify(result, null, 2);
     document.getElementById("results").style.display = "block";
 
-    renderAllCharts(result);
+    renderAllCharts(result, _currentDim);
   } catch (e) {
     showError(`Request failed: ${e.message}`);
   } finally {

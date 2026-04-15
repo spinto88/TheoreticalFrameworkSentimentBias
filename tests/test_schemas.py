@@ -105,13 +105,17 @@ class TestAnalysisInput:
 
 class TestOutletScore:
     def test_valid(self):
-        score = OutletScore(outlet="Reuters", z=1.23)
+        score = OutletScore(outlet="Reuters", z=[1.23])
         assert score.outlet == "Reuters"
-        assert score.z == pytest.approx(1.23)
+        assert score.z == pytest.approx([1.23])
 
     def test_negative_z_is_valid(self):
-        score = OutletScore(outlet="A", z=-3.5)
-        assert score.z == pytest.approx(-3.5)
+        score = OutletScore(outlet="A", z=[-3.5])
+        assert score.z == pytest.approx([-3.5])
+
+    def test_multidimensional_z_is_valid(self):
+        score = OutletScore(outlet="A", z=[1.0, -0.5, 0.3])
+        assert score.z == pytest.approx([1.0, -0.5, 0.3])
 
     def test_missing_z_raises(self):
         with pytest.raises(ValidationError):
@@ -124,10 +128,14 @@ class TestOutletScore:
 
 class TestSubjectScore:
     def test_valid(self):
-        score = SubjectScore(subject="Economy", a=0.8, b=-0.2)
+        score = SubjectScore(subject="Economy", a=[0.8], b=-0.2)
         assert score.subject == "Economy"
-        assert score.a == pytest.approx(0.8)
+        assert score.a == pytest.approx([0.8])
         assert score.b == pytest.approx(-0.2)
+
+    def test_multidimensional_a_is_valid(self):
+        score = SubjectScore(subject="X", a=[0.8, -0.2], b=0.1)
+        assert score.a == pytest.approx([0.8, -0.2])
 
     def test_missing_a_raises(self):
         with pytest.raises(ValidationError):
@@ -135,7 +143,7 @@ class TestSubjectScore:
 
     def test_missing_b_raises(self):
         with pytest.raises(ValidationError):
-            SubjectScore(subject="X", a=0.0)
+            SubjectScore(subject="X", a=[0.0])
 
 
 # ---------------------------------------------------------------------------
@@ -145,8 +153,8 @@ class TestSubjectScore:
 class TestAnalysisOutput:
     def test_valid(self):
         output = AnalysisOutput(
-            outlets=[OutletScore(outlet="A", z=1.0)],
-            subjects=[SubjectScore(subject="X", a=0.5, b=-0.1)],
+            outlets=[OutletScore(outlet="A", z=[1.0])],
+            subjects=[SubjectScore(subject="X", a=[0.5], b=-0.1)],
         )
         assert len(output.outlets) == 1
         assert len(output.subjects) == 1

@@ -30,8 +30,8 @@ VALID_PAYLOAD = {
 }
 
 MOCK_OUTPUT = AnalysisOutput(
-    outlets=[OutletScore(outlet="A", z=1.0), OutletScore(outlet="B", z=-0.5)],
-    subjects=[SubjectScore(subject="X", a=0.8, b=0.2), SubjectScore(subject="Y", a=-0.3, b=0.1)],
+    outlets=[OutletScore(outlet="A", z=[1.0]), OutletScore(outlet="B", z=[-0.5])],
+    subjects=[SubjectScore(subject="X", a=[0.8], b=0.2), SubjectScore(subject="Y", a=[-0.3], b=0.1)],
 )
 
 
@@ -86,14 +86,16 @@ class TestAnalyzeRoute:
         assert len(body["subjects"]) == 2
 
     @patch("src.app.run_analysis", return_value=MOCK_OUTPUT)
-    def test_z_values_are_numeric(self, _mock):
+    def test_z_values_are_list_of_numbers(self, _mock):
         outlets = client.post("/analyze", json=VALID_PAYLOAD).json()["outlets"]
-        assert all(isinstance(o["z"], (int, float)) for o in outlets)
+        assert all(isinstance(o["z"], list) for o in outlets)
+        assert all(isinstance(v, (int, float)) for o in outlets for v in o["z"])
 
     @patch("src.app.run_analysis", return_value=MOCK_OUTPUT)
     def test_a_b_values_are_numeric(self, _mock):
         subjects = client.post("/analyze", json=VALID_PAYLOAD).json()["subjects"]
-        assert all(isinstance(s["a"], (int, float)) for s in subjects)
+        assert all(isinstance(s["a"], list) for s in subjects)
+        assert all(isinstance(v, (int, float)) for s in subjects for v in s["a"])
         assert all(isinstance(s["b"], (int, float)) for s in subjects)
 
 

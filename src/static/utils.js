@@ -132,8 +132,123 @@ function buildBarChartSVG(chart, W, H) {
   ].join("\n");
 }
 
+// ── Scatter SVG export ──────────────────────────────────────────
+function buildScatterChartSVG(chart, W, H) {
+  const PAD  = { top: 40, right: 150, bottom: 72, left: 72 };
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top  - PAD.bottom;
+  const FONT  = "Inter, system-ui, -apple-system, sans-serif";
+
+  const pts         = chart.data.datasets[0].data;
+  const fillColor   = chart.data.datasets[0].backgroundColor;
+  const strokeColor = chart.data.datasets[0].borderColor;
+  const xTitle      = chart.options.scales.x.title.text || "";
+  const yTitle      = chart.options.scales.y.title.text || "";
+
+  if (pts.length === 0)
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"></svg>`;
+
+  const xMin   = chart.scales.x.min;
+  const xMax   = chart.scales.x.max;
+  const yMin   = chart.scales.y.min;
+  const yMax   = chart.scales.y.max;
+  const xRange = xMax - xMin;
+  const yRange = yMax - yMin;
+
+  const xPos = v => PAD.left + plotW * (v - xMin) / xRange;
+  const yPos = v => PAD.top  + plotH * (1 - (v - yMin) / yRange);
+
+  const f   = n => n.toFixed(1);
+  const esc = s => String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+  function niceStep(range, maxTicks) {
+    const rough = range / maxTicks;
+    const mag   = Math.pow(10, Math.floor(Math.log10(rough)));
+    const norm  = rough / mag;
+    const step  = [1, 2, 2.5, 5, 10].find(s => s >= norm) * mag;
+    return step;
+  }
+
+  function makeTicks(min, max) {
+    const step  = niceStep(max - min, 6);
+    const start = Math.ceil(min / step) * step;
+    const ticks = [];
+    for (let t = start; t <= max + step * 0.01; t += step)
+      ticks.push(parseFloat(t.toPrecision(10)));
+    return ticks;
+  }
+
+  const tickLabel = v => {
+    if (Math.abs(v) < 1e-9) return "0";
+    return parseFloat(v.toPrecision(4)).toString();
+  };
+
+  const xTicks = makeTicks(xMin, xMax);
+  const yTicks = makeTicks(yMin, yMax);
+
+  const parts = [];
+
+  // Background
+  parts.push(`<rect width="${W}" height="${H}" fill="#ffffff" rx="8"/>`);
+
+  // X grid + tick labels
+  for (const t of xTicks) {
+    const x = xPos(t);
+    if (x < PAD.left - 1 || x > PAD.left + plotW + 1) continue;
+    parts.push(`<line x1="${f(x)}" y1="${PAD.top}" x2="${f(x)}" y2="${PAD.top + plotH}" stroke="#e5e7eb" stroke-width="1"/>`);
+    parts.push(`<text x="${f(x)}" y="${f(PAD.top + plotH + 18)}" text-anchor="middle" fill="#4b5563" font-size="12" font-family="${FONT}">${esc(tickLabel(t))}</text>`);
+  }
+
+  // Y grid + tick labels
+  for (const t of yTicks) {
+    const y = yPos(t);
+    if (y < PAD.top - 1 || y > PAD.top + plotH + 1) continue;
+    parts.push(`<line x1="${PAD.left}" y1="${f(y)}" x2="${PAD.left + plotW}" y2="${f(y)}" stroke="#e5e7eb" stroke-width="1"/>`);
+    parts.push(`<text x="${PAD.left - 10}" y="${f(y + 4.5)}" text-anchor="end" fill="#4b5563" font-size="12" font-family="${FONT}">${esc(tickLabel(t))}</text>`);
+  }
+
+  // Dashed zero lines
+  if (xMin <= 0 && xMax >= 0) {
+    const x0 = xPos(0);
+    parts.push(`<line x1="${f(x0)}" y1="${PAD.top}" x2="${f(x0)}" y2="${PAD.top + plotH}" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="4 4"/>`);
+  }
+  if (yMin <= 0 && yMax >= 0) {
+    const y0 = yPos(0);
+    parts.push(`<line x1="${PAD.left}" y1="${f(y0)}" x2="${PAD.left + plotW}" y2="${f(y0)}" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="4 4"/>`);
+  }
+
+  // Axis borders
+  parts.push(`<line x1="${PAD.left}" y1="${PAD.top}" x2="${PAD.left}" y2="${PAD.top + plotH}" stroke="#d1d5db" stroke-width="1.5"/>`);
+  parts.push(`<line x1="${PAD.left}" y1="${PAD.top + plotH}" x2="${PAD.left + plotW}" y2="${PAD.top + plotH}" stroke="#d1d5db" stroke-width="1.5"/>`);
+
+  // Points + labels
+  for (const pt of pts) {
+    const cx = xPos(pt.x);
+    const cy = yPos(pt.y);
+    parts.push(`<circle cx="${f(cx)}" cy="${f(cy)}" r="7" fill="${esc(fillColor)}" stroke="${esc(strokeColor)}" stroke-width="1.5"/>`);
+    parts.push(`<text x="${f(cx + 11)}" y="${f(cy - 5)}" fill="#1f2937" font-size="12" font-weight="600" font-family="${FONT}">${esc(pt.label)}</text>`);
+  }
+
+  // Axis titles
+  if (xTitle)
+    parts.push(`<text x="${f(PAD.left + plotW / 2)}" y="${H - 10}" text-anchor="middle" fill="#374151" font-size="13" font-weight="600" font-family="${FONT}">${esc(xTitle)}</text>`);
+  if (yTitle)
+    parts.push(`<text transform="translate(15,${f(PAD.top + plotH / 2)}) rotate(-90)" text-anchor="middle" fill="#374151" font-size="13" font-weight="600" font-family="${FONT}">${esc(yTitle)}</text>`);
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`,
+    ...parts,
+    `</svg>`
+  ].join("\n");
+}
+
 function exportChartSVG(chartRef, filename) {
-  const svg  = buildBarChartSVG(chartRef, 900, 380);
+  const isScatter = chartRef.config.type === "scatter";
+  const svg  = isScatter
+    ? buildScatterChartSVG(chartRef, 900, 520)
+    : buildBarChartSVG(chartRef, 900, 380);
   const blob = new Blob([svg], { type: "image/svg+xml" });
   const link = document.createElement("a");
   link.download = filename + ".svg";
