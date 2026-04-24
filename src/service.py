@@ -134,13 +134,17 @@ def log_likelihood(
     logl: float = 0.0
     for i in range(n_rows):
         for j in range(n_cols):
-            z_ij: float = z[i] * a[j] + b[j]
+            q_ij: float = z[i] * a[j] + b[j]
             N_ij: int = int(np.sum(mentions_matrix[i, j]))
             logl += (
-                (mentions_matrix[i, j, 2] - mentions_matrix[i, j, 0]) * z_ij
-                - N_ij * np.log(np.exp(z_ij) + 1 + np.exp(-z_ij))
+                (mentions_matrix[i, j, 2] - mentions_matrix[i, j, 0]) * q_ij
+                - N_ij * np.log(np.exp(q_ij) + 1 + np.exp(-q_ij))
             )
-            logl -= 0.5 * (z[i] ** 2 + a[j] ** 2 + b[j] ** 2)
+    for i in range(n_rows):
+        logl -= 0.5 * (z[i] ** 2)
+
+    for j in range(n_cols):
+        logl -= 0.5 * (a[j] ** 2 + b[j] ** 2)
 
     return logl
 
