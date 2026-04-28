@@ -67,14 +67,14 @@ class SubjectScore(BaseModel):
         a: Discrimination vector of length D.  Higher absolute values
             in dimension d indicate that outlet bias along that axis
             has a stronger effect when this subject is covered.
-        b: Baseline sentiment vector of length D.  Reflects the overall
-            media sentiment toward this subject along each latent axis,
-            independent of outlet bias.
+        b: Scalar baseline sentiment.  Reflects the overall media sentiment
+            toward this subject, independent of outlet bias and shared
+            across all latent dimensions.
     """
 
     subject: str
     a: List[float]
-    b: List[float]
+    b: float
 
 
 class AnalysisOutput(BaseModel):

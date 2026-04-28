@@ -31,7 +31,7 @@ VALID_PAYLOAD = {
 
 MOCK_OUTPUT = AnalysisOutput(
     outlets=[OutletScore(outlet="A", z=[1.0]), OutletScore(outlet="B", z=[-0.5])],
-    subjects=[SubjectScore(subject="X", a=[0.8], b=[0.2]), SubjectScore(subject="Y", a=[-0.3], b=[0.1])],
+    subjects=[SubjectScore(subject="X", a=[0.8], b=0.2), SubjectScore(subject="Y", a=[-0.3], b=0.1)],
 )
 
 
@@ -92,12 +92,11 @@ class TestAnalyzeRoute:
         assert all(isinstance(v, (int, float)) for o in outlets for v in o["z"])
 
     @patch("src.app.run_analysis", return_value=MOCK_OUTPUT)
-    def test_a_b_values_are_lists_of_numbers(self, _mock):
+    def test_a_b_values_correct_types(self, _mock):
         subjects = client.post("/analyze", json=VALID_PAYLOAD).json()["subjects"]
         assert all(isinstance(s["a"], list) for s in subjects)
-        assert all(isinstance(s["b"], list) for s in subjects)
         assert all(isinstance(v, (int, float)) for s in subjects for v in s["a"])
-        assert all(isinstance(v, (int, float)) for s in subjects for v in s["b"])
+        assert all(isinstance(s["b"], (int, float)) for s in subjects)
 
 
 # ---------------------------------------------------------------------------

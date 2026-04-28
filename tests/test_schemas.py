@@ -84,8 +84,6 @@ class TestAnalysisInput:
         assert len(inp.data) == 5
 
     def test_empty_list_is_valid(self):
-        """Pydantic accepts an empty list; business logic constraints are
-        handled at the service layer."""
         inp = AnalysisInput(data=[])
         assert inp.data == []
 
@@ -144,19 +142,23 @@ class TestOutletScore:
 
 class TestSubjectScore:
     def test_valid(self):
-        score = SubjectScore(subject="Economy", a=[0.8], b=[-0.2])
+        score = SubjectScore(subject="Economy", a=[0.8], b=-0.2)
         assert score.subject == "Economy"
         assert score.a == pytest.approx([0.8])
-        assert score.b == pytest.approx([-0.2])
+        assert score.b == pytest.approx(-0.2)
 
     def test_valid_two_dimensions(self):
-        score = SubjectScore(subject="X", a=[0.8, 0.3], b=[-0.2, 0.1])
+        score = SubjectScore(subject="X", a=[0.8, 0.3], b=0.1)
         assert score.a == pytest.approx([0.8, 0.3])
-        assert score.b == pytest.approx([-0.2, 0.1])
+        assert score.b == pytest.approx(0.1)
+
+    def test_b_is_scalar(self):
+        score = SubjectScore(subject="X", a=[1.0], b=0.5)
+        assert isinstance(score.b, float)
 
     def test_missing_a_raises(self):
         with pytest.raises(ValidationError):
-            SubjectScore(subject="X", b=[0.0])
+            SubjectScore(subject="X", b=0.0)
 
     def test_missing_b_raises(self):
         with pytest.raises(ValidationError):
@@ -171,7 +173,7 @@ class TestAnalysisOutput:
     def test_valid(self):
         output = AnalysisOutput(
             outlets=[OutletScore(outlet="A", z=[1.0])],
-            subjects=[SubjectScore(subject="X", a=[0.5], b=[-0.1])],
+            subjects=[SubjectScore(subject="X", a=[0.5], b=-0.1)],
         )
         assert len(output.outlets) == 1
         assert len(output.subjects) == 1

@@ -20,12 +20,12 @@ function exportAllCharts() {
   const nDims = (typeof chartZ !== "undefined" && Array.isArray(chartZ)) ? chartZ.length : 0;
   const pairs = [];
   for (let d = 0; d < nDims; d++) {
-    const sfx  = nDims > 1 ? `-dim${d + 1}` : "";
+    const sfx   = nDims > 1 ? `-dim${d + 1}` : "";
     const idSfx = nDims > 1 ? `_dim${d + 1}` : "";
     pairs.push([`chartZ${idSfx}`, `outlet-bias-z${sfx}`]);
     pairs.push([`chartA${idSfx}`, `subject-discrimination-a${sfx}`]);
-    pairs.push([`chartB${idSfx}`, `subject-baseline-b${sfx}`]);
   }
+  pairs.push(["chartB", "subject-baseline-b"]);
   pairs.forEach(([id, name], i) =>
     setTimeout(() => exportChartPNG(id, name), i * 250)
   );
