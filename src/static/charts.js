@@ -1,113 +1,82 @@
-// Chart instances indexed by dimension (z and a per dim; b always single)
-let chartZ = [], chartA = [], chartB = null;
-
-function exportAllChartsSVG() {
-  const nDims = chartZ.length;
-  chartZ.forEach((c, d) => {
-    const sfx = nDims > 1 ? `-dim${d + 1}` : "";
-    exportChartSVG(c,        `outlet-bias-z${sfx}`);
-    exportChartSVG(chartA[d], `subject-discrimination-a${sfx}`);
-  });
-  if (chartB) exportChartSVG(chartB, "subject-baseline-b");
-}
-
-function exportChartSVGById(canvasId) {
-  const all = [...chartZ, ...chartA, chartB].filter(Boolean);
-  const ref = all.find(c => c.canvas && c.canvas.id === canvasId);
-  if (ref) exportChartSVG(ref, canvasId);
-}
+// Chart instances — null until first render, then reused via destroy+recreate
+// on the same (static) canvas elements. Canvas elements never leave the DOM,
+// so Chart.js can always clean up its ResizeObserver synchronously.
+let chartZ1 = null, chartA1 = null;
+let chartZ2 = null, chartA2 = null;
+let chartB  = null;
 
 function sortByValue(labels, values) {
   const idx = [...Array(labels.length).keys()].sort((a, b) => values[a] - values[b]);
   return { labels: idx.map(i => labels[i]), values: idx.map(i => values[i]) };
 }
 
-function makeChartCardHTML(canvasId, title, badge, badgeClass, desc, height) {
-  return `
-    <div class="chart-card">
-      <div class="chart-header">
-        <div class="chart-header-left">
-          <span class="chart-title">${title}</span>
-          <span class="chart-badge ${badgeClass}">${badge}</span>
-        </div>
-        <div class="export-group">
-          <button class="btn-export" onclick="exportChartPNG('${canvasId}','${canvasId}')">PNG</button>
-          <button class="btn-export" onclick="exportChartSVGById('${canvasId}')">SVG</button>
-        </div>
-      </div>
-      <div class="chart-wrap" style="height:${height || 300}px"><canvas id="${canvasId}"></canvas></div>
-    </div>`;
+function exportAllChartsSVG() {
+  const dim2Visible = document.getElementById("cardZ2").style.display !== "none";
+  if (chartZ1) exportChartSVG(chartZ1, "outlet-bias-z1");
+  if (chartA1) exportChartSVG(chartA1, "subject-discrimination-a1");
+  if (dim2Visible && chartZ2) exportChartSVG(chartZ2, "outlet-bias-z2");
+  if (dim2Visible && chartA2) exportChartSVG(chartA2, "subject-discrimination-a2");
+  if (chartB)  exportChartSVG(chartB,  "subject-baseline-b");
 }
 
 function renderAllCharts(data) {
   const nDims = data.outlets[0].z.length;
+  const outletNames  = data.outlets.map(o => o.outlet);
+  const subjectNames = data.subjects.map(s => s.subject);
 
-  // Destroy old instances before clearing the DOM
-  [...chartZ, ...chartA].forEach(c => c && c.destroy());
-  if (chartB) chartB.destroy();
-  chartZ = []; chartA = []; chartB = null;
+  // Update dim-1 card titles to include "Dim 1" suffix only when 2D
+  const sfx = nDims > 1 ? " — Dim 1" : "";
+  document.getElementById("titleZ1").textContent = "Outlet Bias" + sfx;
+  document.getElementById("badgeZ1").textContent = nDims > 1 ? "z₁" : "z";
+  document.getElementById("titleA1").textContent = "Subject Discrimination" + sfx;
+  document.getElementById("badgeA1").textContent = nDims > 1 ? "a₁" : "a";
 
-  // Build the full HTML string first, then set innerHTML once
-  let html = "";
-  for (let d = 0; d < nDims; d++) {
-    const dimSuffix = nDims > 1 ? ` — Dim ${d + 1}` : "";
-    const idSuffix  = nDims > 1 ? `_dim${d + 1}` : "";
-    const dLabel    = nDims > 1 ? String(d + 1) : "";
-    html += makeChartCardHTML(
-      `chartZ${idSuffix}`,
-      `Outlet Bias${dimSuffix}`, `z${dLabel}`, "badge-z",
-      "Latent bias score per outlet along this dimension.",
-      380
-    );
-    html += makeChartCardHTML(
-      `chartA${idSuffix}`,
-      `Subject Discrimination${dimSuffix}`, `a${dLabel}`, "badge-a",
-      "Discrimination parameter per subject along this dimension."
-    );
-  }
-  html += makeChartCardHTML(
-    "chartB",
-    "Subject Baseline", "b", "badge-b",
-    "Scalar baseline sentiment per subject, shared across all dimensions."
+  // Show or hide dim-2 cards
+  const show2 = nDims > 1;
+  document.getElementById("cardZ2").style.display = show2 ? "" : "none";
+  document.getElementById("cardA2").style.display = show2 ? "" : "none";
+
+  // --- Dim 1 charts ---
+  // Passing the existing chart reference causes createBarChart to destroy it
+  // properly (canvas still in DOM) before creating a fresh one on the same canvas.
+  const { labels: zL1, values: zV1 } = sortByValue(outletNames, data.outlets.map(o => o.z[0]));
+  chartZ1 = createBarChart(
+    "chartZ1", chartZ1, zL1, zV1,
+    nDims > 1 ? "Outlet Bias (z₁)" : "Outlet Bias (z)", "z",
+    { x: "Media Outlet", y: nDims > 1 ? "z₁" : "z" },
+    { maxRotation: 90, minRotation: 90, autoSkip: false }
   );
 
-  document.getElementById("chartsContainer").innerHTML = html;
+  const { labels: aL1, values: aV1 } = sortByValue(subjectNames, data.subjects.map(s => s.a[0]));
+  chartA1 = createBarChart(
+    "chartA1", chartA1, aL1, aV1,
+    nDims > 1 ? "Discrimination (a₁)" : "Discrimination (a)", "a",
+    { x: "Subject", y: nDims > 1 ? "a₁" : "a" }
+  );
 
-  // Now create the Chart.js instances (canvas elements are in the DOM)
-  for (let d = 0; d < nDims; d++) {
-    const idSuffix = nDims > 1 ? `_dim${d + 1}` : "";
-    const dLabel   = nDims > 1 ? String(d + 1) : "";
-
-    const { labels: zL, values: zV } = sortByValue(
-      data.outlets.map(o => o.outlet),
-      data.outlets.map(o => o.z[d])
-    );
-    chartZ[d] = createBarChart(
-      `chartZ${idSuffix}`, null, zL, zV,
-      `Outlet Bias (z${dLabel})`, "z",
-      { x: "Media Outlet", y: `Bias Score (z${dLabel})` },
+  // --- Dim 2 charts ---
+  if (show2) {
+    const { labels: zL2, values: zV2 } = sortByValue(outletNames, data.outlets.map(o => o.z[1]));
+    chartZ2 = createBarChart(
+      "chartZ2", chartZ2, zL2, zV2,
+      "Outlet Bias (z₂)", "z",
+      { x: "Media Outlet", y: "z₂" },
       { maxRotation: 90, minRotation: 90, autoSkip: false }
     );
 
-    const { labels: aL, values: aV } = sortByValue(
-      data.subjects.map(s => s.subject),
-      data.subjects.map(s => s.a[d])
-    );
-    chartA[d] = createBarChart(
-      `chartA${idSuffix}`, null, aL, aV,
-      `Discrimination (a${dLabel})`, "a",
-      { x: "Subject", y: `Discrimination (a${dLabel})` }
+    const { labels: aL2, values: aV2 } = sortByValue(subjectNames, data.subjects.map(s => s.a[1]));
+    chartA2 = createBarChart(
+      "chartA2", chartA2, aL2, aV2,
+      "Discrimination (a₂)", "a",
+      { x: "Subject", y: "a₂" }
     );
   }
 
-  // b is always a scalar — one chart regardless of n_dims
-  const { labels: bL, values: bV } = sortByValue(
-    data.subjects.map(s => s.subject),
-    data.subjects.map(s => s.b)
-  );
+  // --- Baseline chart (always scalar) ---
+  const { labels: bL, values: bV } = sortByValue(subjectNames, data.subjects.map(s => s.b));
   chartB = createBarChart(
-    "chartB", null, bL, bV,
+    "chartB", chartB, bL, bV,
     "Baseline (b)", "b",
-    { x: "Subject", y: "Baseline Sentiment (b)" }
+    { x: "Subject", y: "b" }
   );
 }

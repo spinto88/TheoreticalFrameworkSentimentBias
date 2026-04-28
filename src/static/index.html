@@ -414,7 +414,82 @@
       </div>
       <pre id="rawOutput"></pre>
 
-      <div class="charts-grid" id="chartsContainer"></div>
+      <div class="charts-grid">
+
+        <!-- Dimension 1 — always visible -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-header-left">
+              <span class="chart-title" id="titleZ1">Outlet Bias</span>
+              <span class="chart-badge badge-z" id="badgeZ1">z</span>
+            </div>
+            <div class="export-group">
+              <button class="btn-export" onclick="exportChartPNG('chartZ1','outlet-bias-z1')">PNG</button>
+              <button class="btn-export" onclick="if(chartZ1) exportChartSVG(chartZ1,'outlet-bias-z1')">SVG</button>
+            </div>
+          </div>
+          <div class="chart-wrap" style="height:380px"><canvas id="chartZ1"></canvas></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-header-left">
+              <span class="chart-title" id="titleA1">Subject Discrimination</span>
+              <span class="chart-badge badge-a" id="badgeA1">a</span>
+            </div>
+            <div class="export-group">
+              <button class="btn-export" onclick="exportChartPNG('chartA1','subject-discrimination-a1')">PNG</button>
+              <button class="btn-export" onclick="if(chartA1) exportChartSVG(chartA1,'subject-discrimination-a1')">SVG</button>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="chartA1"></canvas></div>
+        </div>
+
+        <!-- Dimension 2 — hidden unless n_dimensions=2 -->
+        <div class="chart-card" id="cardZ2" style="display:none">
+          <div class="chart-header">
+            <div class="chart-header-left">
+              <span class="chart-title">Outlet Bias &mdash; Dim 2</span>
+              <span class="chart-badge badge-z">z&#8322;</span>
+            </div>
+            <div class="export-group">
+              <button class="btn-export" onclick="exportChartPNG('chartZ2','outlet-bias-z2')">PNG</button>
+              <button class="btn-export" onclick="if(chartZ2) exportChartSVG(chartZ2,'outlet-bias-z2')">SVG</button>
+            </div>
+          </div>
+          <div class="chart-wrap" style="height:380px"><canvas id="chartZ2"></canvas></div>
+        </div>
+
+        <div class="chart-card" id="cardA2" style="display:none">
+          <div class="chart-header">
+            <div class="chart-header-left">
+              <span class="chart-title">Subject Discrimination &mdash; Dim 2</span>
+              <span class="chart-badge badge-a">a&#8322;</span>
+            </div>
+            <div class="export-group">
+              <button class="btn-export" onclick="exportChartPNG('chartA2','subject-discrimination-a2')">PNG</button>
+              <button class="btn-export" onclick="if(chartA2) exportChartSVG(chartA2,'subject-discrimination-a2')">SVG</button>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="chartA2"></canvas></div>
+        </div>
+
+        <!-- Baseline — always scalar, always one chart -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-header-left">
+              <span class="chart-title">Subject Baseline</span>
+              <span class="chart-badge badge-b">b</span>
+            </div>
+            <div class="export-group">
+              <button class="btn-export" onclick="exportChartPNG('chartB','subject-baseline-b')">PNG</button>
+              <button class="btn-export" onclick="if(chartB) exportChartSVG(chartB,'subject-baseline-b')">SVG</button>
+            </div>
+          </div>
+          <div class="chart-wrap"><canvas id="chartB"></canvas></div>
+        </div>
+
+      </div>
     </div>
 
   </div>
