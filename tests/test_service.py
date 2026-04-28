@@ -6,7 +6,7 @@ Covers:
 - build_output  : AnalysisOutput assembly from raw parameter arrays
 - log_likelihood / negative_log_likelihood : return types and relationship
 - run_analysis  : output structure and parameter bounds
-                  (differential_evolution is patched to keep tests fast)
+                  (minimize is patched to keep tests fast)
 """
 
 from unittest.mock import patch, MagicMock
@@ -221,7 +221,7 @@ class TestLogLikelihood:
 # ---------------------------------------------------------------------------
 
 class TestRunAnalysis:
-    """Tests for run_analysis with differential_evolution patched out.
+    """Tests for run_analysis with minimize patched out.
 
     The patch makes tests deterministic and fast while still exercising
     build_tensor, the parameter slicing logic, and build_output.
@@ -234,52 +234,52 @@ class TestRunAnalysis:
         mock.x = rng.uniform(-1, 1, m + 2 * k)
         return mock
 
-    @patch("src.service.differential_evolution")
-    def test_output_outlet_count(self, mock_de):
+    @patch("src.service.minimize")
+    def test_output_outlet_count(self, mock_min):
         data = [
             make_mention("A", "X", "positive", 5),
             make_mention("B", "X", "negative", 3),
             make_mention("C", "X", "neutral",  2),
         ]
-        mock_de.return_value = self._mock_solution(3, 1)
+        mock_min.return_value = self._mock_solution(3, 1)
         result = run_analysis(data)
         assert len(result.outlets) == 3
 
-    @patch("src.service.differential_evolution")
-    def test_output_subject_count(self, mock_de):
+    @patch("src.service.minimize")
+    def test_output_subject_count(self, mock_min):
         data = [
             make_mention("A", "X", "positive", 5),
             make_mention("A", "Y", "negative", 3),
             make_mention("A", "Z", "neutral",  2),
         ]
-        mock_de.return_value = self._mock_solution(1, 3)
+        mock_min.return_value = self._mock_solution(1, 3)
         result = run_analysis(data)
         assert len(result.subjects) == 3
 
-    @patch("src.service.differential_evolution")
-    def test_outlet_names_are_sorted(self, mock_de):
+    @patch("src.service.minimize")
+    def test_outlet_names_are_sorted(self, mock_min):
         data = [
             make_mention("Z", "X", "positive", 1),
             make_mention("A", "X", "positive", 1),
             make_mention("M", "X", "positive", 1),
         ]
-        mock_de.return_value = self._mock_solution(3, 1)
+        mock_min.return_value = self._mock_solution(3, 1)
         result = run_analysis(data)
         assert [o.outlet for o in result.outlets] == ["A", "M", "Z"]
 
-    @patch("src.service.differential_evolution")
-    def test_subject_names_are_sorted(self, mock_de):
+    @patch("src.service.minimize")
+    def test_subject_names_are_sorted(self, mock_min):
         data = [
             make_mention("A", "Zebra",  "positive", 1),
             make_mention("A", "Apple",  "negative", 1),
             make_mention("A", "Mango",  "neutral",  1),
         ]
-        mock_de.return_value = self._mock_solution(1, 3)
+        mock_min.return_value = self._mock_solution(1, 3)
         result = run_analysis(data)
         assert [s.subject for s in result.subjects] == ["Apple", "Mango", "Zebra"]
 
-    @patch("src.service.differential_evolution")
-    def test_parameters_within_bounds(self, mock_de):
+    @patch("src.service.minimize")
+    def test_parameters_within_bounds(self, mock_min):
         """Solver bounds are [-5, 5]; the solution must respect them."""
         data = [
             make_mention("A", "X", "positive", 8),
@@ -288,7 +288,7 @@ class TestRunAnalysis:
         rng = np.random.default_rng(0)
         mock = MagicMock()
         mock.x = rng.uniform(-5, 5, 6)   # m=2, k=2  →  2 + 4 params
-        mock_de.return_value = mock
+        mock_min.return_value = mock
         result = run_analysis(data)
         for o in result.outlets:
             assert -5.0 <= o.z <= 5.0
@@ -296,14 +296,14 @@ class TestRunAnalysis:
             assert -5.0 <= s.a <= 5.0
             assert -5.0 <= s.b <= 5.0
 
-    @patch("src.service.differential_evolution")
-    def test_differential_evolution_called_once(self, mock_de):
-        mock_de.return_value = self._mock_solution(1, 1)
+    @patch("src.service.minimize")
+    def test_minimize_called_once(self, mock_min):
+        mock_min.return_value = self._mock_solution(1, 1)
         run_analysis([make_mention("A", "X", "positive", 1)])
-        mock_de.assert_called_once()
+        mock_min.assert_called_once()
 
-    @patch("src.service.differential_evolution")
-    def test_returns_analysis_output(self, mock_de):
-        mock_de.return_value = self._mock_solution(1, 1)
+    @patch("src.service.minimize")
+    def test_returns_analysis_output(self, mock_min):
+        mock_min.return_value = self._mock_solution(1, 1)
         result = run_analysis([make_mention("A", "X", "positive", 1)])
         assert isinstance(result, AnalysisOutput)
