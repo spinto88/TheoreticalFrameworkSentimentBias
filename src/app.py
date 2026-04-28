@@ -38,7 +38,7 @@ def analyze(input_data: AnalysisInput) -> AnalysisOutput:
         Estimated *z* scores per outlet and (*a*, *b*) parameters per
         subject.
     """
-    return run_analysis(input_data.data)
+    return run_analysis(input_data.data, n_dims=input_data.n_dimensions)
 
 
 @app.get("/")

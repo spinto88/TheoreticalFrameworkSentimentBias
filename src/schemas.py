@@ -1,8 +1,10 @@
 """
 Pydantic schemas for the /analyze endpoint.
 
-Request  : AnalysisInput  — wraps a list of Mention records.
-Response : AnalysisOutput — carries per-outlet and per-subject scores.
+Request  : AnalysisInput  — wraps a list of Mention records plus the number
+           of latent dimensions (1 or 2) to fit.
+Response : AnalysisOutput — carries per-outlet and per-subject scores,
+           each expressed as a list of D floats (one per latent dimension).
 """
 
 from typing import List, Literal
@@ -34,23 +36,27 @@ class AnalysisInput(BaseModel):
         data: One or more mention observations.  Multiple rows may share
             the same (outlet, subject, mention_type) triple — their
             counts will be summed when building the mention tensor.
+        n_dimensions: Number of latent dimensions to fit (1 or 2).
+            Defaults to 1 (equivalent to the original scalar model).
     """
 
     data: List[Mention]
+    n_dimensions: int = Field(1, ge=1, le=2)
 
 
 class OutletScore(BaseModel):
-    """Estimated bias score for a single media outlet.
+    """Estimated bias score(s) for a single media outlet.
 
     Attributes:
         outlet: Outlet name as provided in the input.
-        z: Latent bias score.  Positive values indicate a tendency to
-            cover subjects positively; negative values indicate a
-            negative tendency.
+        z: Latent bias vector of length D (one entry per dimension).
+            The sign of each component is only meaningful in combination
+            with the matching dimension of the subject's discrimination
+            parameter ``a``.
     """
 
     outlet: str
-    z: float
+    z: List[float]
 
 
 class SubjectScore(BaseModel):
@@ -58,16 +64,17 @@ class SubjectScore(BaseModel):
 
     Attributes:
         subject: Subject name as provided in the input.
-        a: Discrimination parameter.  Higher absolute values indicate
-            that outlet bias has a stronger effect when this subject is
-            being covered.
-        b: Baseline sentiment parameter.  Reflects the overall media
-            sentiment toward this subject, independent of outlet bias.
+        a: Discrimination vector of length D.  Higher absolute values
+            in dimension d indicate that outlet bias along that axis
+            has a stronger effect when this subject is covered.
+        b: Baseline sentiment vector of length D.  Reflects the overall
+            media sentiment toward this subject along each latent axis,
+            independent of outlet bias.
     """
 
     subject: str
-    a: float
-    b: float
+    a: List[float]
+    b: List[float]
 
 
 class AnalysisOutput(BaseModel):

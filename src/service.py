@@ -1,22 +1,30 @@
 """
 Core analysis service.
 
-Implements the latent bias estimation model:
+Implements the latent bias estimation model with D latent dimensions:
 
-  - z[i]  : bias score for media outlet i
-  - a[j]  : discrimination parameter for subject j
-             (how strongly outlets polarise when covering this subject)
-  - b[j]  : baseline sentiment for subject j
-             (overall media sentiment independent of outlet bias)
+  - z[i, d] : d-th bias component for media outlet i
+  - a[j, d] : d-th discrimination parameter for subject j
+  - b[j, d] : d-th baseline sentiment for subject j
 
-The model assumes the log-odds of positive vs. negative mentions for
-outlet i covering subject j follow a linear function of z[i]:
+The log-odds of a positive vs. negative mention for outlet i covering
+subject j sums contributions across all D dimensions:
 
-    log-odds(i, j) = z[i] * a[j] + b[j]
+    log-odds(i, j) = sum_d( z[i,d] * a[j,d] + b[j,d] )
+
+Each dimension d is independent: z[i,d] only interacts with a[j,d]
+and b[j,d].  Setting D=1 recovers the original scalar model.
 
 Parameters are estimated by maximising a penalised log-likelihood
 (Gaussian regularisation on all parameters) using SciPy's
 L-BFGS-B gradient descent solver with an analytical gradient.
+
+Flat parameter vector layout for m outlets, k subjects, D dimensions
+(total size (m + 2k) * D, C-order / row-major)::
+
+    x = [z[0,0], …, z[0,D-1], z[1,0], …, z[m-1,D-1],
+         a[0,0], …, a[k-1,D-1],
+         b[0,0], …, b[k-1,D-1]]
 """
 
 import json
@@ -80,20 +88,20 @@ def build_output(
     Args:
         outlets: Ordered list of outlet names (length *m*).
         subjects: Ordered list of subject names (length *k*).
-        z: Estimated bias scores, shape ``(m,)``.
-        a: Estimated discrimination parameters, shape ``(k,)``.
-        b: Estimated baseline sentiment parameters, shape ``(k,)``.
+        z: Estimated bias scores, shape ``(m, D)``.
+        a: Estimated discrimination parameters, shape ``(k, D)``.
+        b: Estimated baseline sentiment parameters, shape ``(k, D)``.
 
     Returns:
         An :class:`~src.schemas.AnalysisOutput` instance ready for
         serialisation.
     """
     outlet_scores: List[OutletScore] = [
-        OutletScore(outlet=outlets[i], z=float(z[i]))
+        OutletScore(outlet=outlets[i], z=z[i].tolist())
         for i in range(len(outlets))
     ]
     subject_scores: List[SubjectScore] = [
-        SubjectScore(subject=subjects[j], a=float(a[j]), b=float(b[j]))
+        SubjectScore(subject=subjects[j], a=a[j].tolist(), b=b[j].tolist())
         for j in range(len(subjects))
     ]
     return AnalysisOutput(outlets=outlet_scores, subjects=subject_scores)
@@ -102,24 +110,21 @@ def build_output(
 def log_likelihood(
     x: NDArray[np.float64],
     mentions_matrix: NDArray[np.int_],
+    n_dims: int = 1,
 ) -> float:
-    """Compute the penalised log-likelihood of the bias model.
+    """Compute the penalised log-likelihood of the multidimensional bias model.
 
-    The likelihood is derived from a symmetric ordinal model where, for
-    outlet *i* and subject *j*, the log-odds of a positive vs. negative
-    mention equals ``z[i] * a[j] + b[j]``.  The normalising denominator
-    accounts for neutral mentions via a three-category softmax.
+    The linear predictor for outlet *i* and subject *j* sums contributions
+    from all D latent dimensions::
 
-    A Gaussian (L2) penalty with unit variance is applied to all
-    parameters to regularise the solution.
+        q_ij = sum_d( z[i,d] * a[j,d] + b[j,d] )
 
-    The parameter vector ``x`` is laid out as::
-
-        x = [z_0, ..., z_{m-1}, a_0, ..., a_{k-1}, b_0, ..., b_{k-1}]
+    A Gaussian (L2) penalty is applied to every scalar parameter.
 
     Args:
-        x: Flat parameter vector of length ``m + 2k``.
+        x: Flat parameter vector of length ``(m + 2k) * n_dims``.
         mentions_matrix: Mention counts, shape ``(m, k, 3)``.
+        n_dims: Number of latent dimensions D (default 1).
 
     Returns:
         The penalised log-likelihood value (higher is better).
@@ -127,24 +132,22 @@ def log_likelihood(
     n_rows: int = mentions_matrix.shape[0]
     n_cols: int = mentions_matrix.shape[1]
 
-    z: NDArray[np.float64] = x[:n_rows]
-    a: NDArray[np.float64] = x[n_rows : n_rows + n_cols]
-    b: NDArray[np.float64] = x[n_rows + n_cols :]
+    z: NDArray[np.float64] = x[: n_rows * n_dims].reshape(n_rows, n_dims)
+    a: NDArray[np.float64] = x[n_rows * n_dims : (n_rows + n_cols) * n_dims].reshape(n_cols, n_dims)
+    b: NDArray[np.float64] = x[(n_rows + n_cols) * n_dims :].reshape(n_cols, n_dims)
 
     logl: float = 0.0
     for i in range(n_rows):
         for j in range(n_cols):
-            q_ij: float = z[i] * a[j] + b[j]
+            q_ij: float = float(np.sum(z[i] * a[j] + b[j]))
             N_ij: int = int(np.sum(mentions_matrix[i, j]))
             logl += (
                 (mentions_matrix[i, j, 2] - mentions_matrix[i, j, 0]) * q_ij
                 - N_ij * np.log(np.exp(q_ij) + 1 + np.exp(-q_ij))
             )
-    for i in range(n_rows):
-        logl -= 0.5 * (z[i] ** 2)
 
-    for j in range(n_cols):
-        logl -= 0.5 * (a[j] ** 2 + b[j] ** 2)
+    logl -= 0.5 * float(np.sum(z ** 2))
+    logl -= 0.5 * float(np.sum(a ** 2 + b ** 2))
 
     return logl
 
@@ -152,79 +155,80 @@ def log_likelihood(
 def negative_log_likelihood(
     x: NDArray[np.float64],
     mentions_matrix: NDArray[np.int_],
+    n_dims: int = 1,
 ) -> float:
     """Return the negated log-likelihood for use with minimisation solvers.
 
     Args:
-        x: Flat parameter vector of length ``m + 2k``.
+        x: Flat parameter vector of length ``(m + 2k) * n_dims``.
         mentions_matrix: Mention counts, shape ``(m, k, 3)``.
+        n_dims: Number of latent dimensions D (default 1).
 
     Returns:
-        ``-log_likelihood(x, mentions_matrix)``.
+        ``-log_likelihood(x, mentions_matrix, n_dims)``.
     """
-    return -log_likelihood(x, mentions_matrix)
+    return -log_likelihood(x, mentions_matrix, n_dims)
 
 
 def grad_negative_log_likelihood(
     x: NDArray[np.float64],
     mentions_matrix: NDArray[np.int_],
+    n_dims: int = 1,
 ) -> NDArray[np.float64]:
     """Compute the gradient of the negative penalised log-likelihood.
 
-    Analytical gradient of :func:`negative_log_likelihood` with respect to
-    all parameters.  The intermediate weight for outlet *i* and subject *j*
-    is::
+    For each dimension d, the partial derivatives are:
 
-        W_ij = (pos_ij - neg_ij) - N_ij * tanh(q_ij / 2) / 2 * 2
+    - ``dL/dz[i,d] = sum_j W_ij * a[j,d] - z[i,d]``
+    - ``dL/da[j,d] = sum_i W_ij * z[i,d] - a[j,d]``
+    - ``dL/db[j,d] = sum_i W_ij            - b[j,d]``
 
-    where ``q_ij = z[i] * a[j] + b[j]``.
+    where ``W_ij = (pos_ij - neg_ij) - N_ij * tanh(q_ij / 2)``
+    and ``q_ij = sum_d( z[i,d] * a[j,d] + b[j,d] )``.
+
+    Since *W_ij* is scalar (independent of d), each dimension of b[j]
+    receives the same data gradient — only the regularisation term
+    ``-b[j,d]`` distinguishes components.
 
     Args:
-        x: Flat parameter vector of length ``m + 2k``.
+        x: Flat parameter vector of length ``(m + 2k) * n_dims``.
         mentions_matrix: Mention counts, shape ``(m, k, 3)``.
+        n_dims: Number of latent dimensions D (default 1).
 
     Returns:
-        Gradient vector of length ``m + 2k``.
+        Gradient vector of length ``(m + 2k) * n_dims``.
     """
     n_rows: int = mentions_matrix.shape[0]
     n_cols: int = mentions_matrix.shape[1]
 
-    z: NDArray[np.float64] = x[:n_rows]
-    a: NDArray[np.float64] = x[n_rows : n_rows + n_cols]
-    b: NDArray[np.float64] = x[n_rows + n_cols :]
+    z: NDArray[np.float64] = x[: n_rows * n_dims].reshape(n_rows, n_dims)
+    a: NDArray[np.float64] = x[n_rows * n_dims : (n_rows + n_cols) * n_dims].reshape(n_cols, n_dims)
+    b: NDArray[np.float64] = x[(n_rows + n_cols) * n_dims :].reshape(n_cols, n_dims)
 
-    grad_z: NDArray[np.float64] = np.zeros(n_rows)
-    grad_a: NDArray[np.float64] = np.zeros(n_cols)
-    grad_b: NDArray[np.float64] = np.zeros(n_cols)
+    grad_z: NDArray[np.float64] = np.zeros_like(z)
+    grad_a: NDArray[np.float64] = np.zeros_like(a)
+    grad_b: NDArray[np.float64] = np.zeros_like(b)
 
     for i in range(n_rows):
         for j in range(n_cols):
-            q_ij: float = z[i] * a[j] + b[j]
+            q_ij: float = float(np.sum(z[i] * a[j] + b[j]))
             N_ij: int = int(np.sum(mentions_matrix[i, j]))
             W_ij: float = (
                 float(mentions_matrix[i, j, 2] - mentions_matrix[i, j, 0])
                 - N_ij * (np.exp(q_ij) - np.exp(-q_ij)) / (np.exp(q_ij) + 1 + np.exp(-q_ij))
             )
             grad_z[i] += W_ij * a[j]
-        grad_z[i] -= z[i]
-
-    for j in range(n_cols):
-        for i in range(n_rows):
-            q_ij = z[i] * a[j] + b[j]
-            N_ij = int(np.sum(mentions_matrix[i, j]))
-            W_ij = (
-                float(mentions_matrix[i, j, 2] - mentions_matrix[i, j, 0])
-                - N_ij * (np.exp(q_ij) - np.exp(-q_ij)) / (np.exp(q_ij) + 1 + np.exp(-q_ij))
-            )
             grad_a[j] += W_ij * z[i]
-            grad_b[j] += W_ij
-        grad_a[j] -= a[j]
-        grad_b[j] -= b[j]
+            grad_b[j] += W_ij  # W_ij is scalar — broadcasts to all D dims
 
-    return -np.hstack([grad_z, grad_a, grad_b])
+    grad_z -= z
+    grad_a -= a
+    grad_b -= b
+
+    return -np.concatenate([grad_z.ravel(), grad_a.ravel(), grad_b.ravel()])
 
 
-def run_analysis(data: List[Mention]) -> AnalysisOutput:
+def run_analysis(data: List[Mention], n_dims: int = 1) -> AnalysisOutput:
     """Estimate latent bias parameters from a list of mention records.
 
     Builds the mention tensor, sets symmetric box constraints
@@ -234,34 +238,35 @@ def run_analysis(data: List[Mention]) -> AnalysisOutput:
     Args:
         data: List of :class:`~src.schemas.Mention` objects covering one
             or more outlet–subject–sentiment combinations.
+        n_dims: Number of latent dimensions D to fit (default 1).
 
     Returns:
         An :class:`~src.schemas.AnalysisOutput` with estimated *z*
-        scores for each outlet and (*a*, *b*) parameters for each
-        subject.
+        vectors (length D) for each outlet and (*a*, *b*) vectors for
+        each subject.
     """
     mentions_matrix, outlets, subjects = build_tensor(data)
 
     m: int = len(outlets)
     k: int = len(subjects)
+    n_params: int = (m + 2 * k) * n_dims
 
-    bounds: Bounds = Bounds([-5] * (m + 2 * k), [5] * (m + 2 * k))
-
-    x0: NDArray[np.float64] = np.random.normal(size=(m + 2 * k))
+    bounds: Bounds = Bounds([-5] * n_params, [5] * n_params)
+    x0: NDArray[np.float64] = np.random.normal(size=n_params)
 
     solution: OptimizeResult = minimize(
         fun=negative_log_likelihood,
         x0=x0,
-        args=(mentions_matrix,),
+        args=(mentions_matrix, n_dims),
         method="L-BFGS-B",
         jac=grad_negative_log_likelihood,
         bounds=bounds,
         tol=1e-6,
     )
 
-    z = solution.x[:m]
-    a = solution.x[m : m + k]
-    b = solution.x[m + k :]
+    z = solution.x[: m * n_dims].reshape(m, n_dims)
+    a = solution.x[m * n_dims : (m + k) * n_dims].reshape(k, n_dims)
+    b = solution.x[(m + k) * n_dims :].reshape(k, n_dims)
 
     return build_output(outlets, subjects, z, a, b)
 

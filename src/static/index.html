@@ -374,6 +374,13 @@
       <input type="file" id="fileInput" accept=".json,.csv">
 
       <div class="input-row">
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.875rem;color:var(--muted);margin-right:auto;">
+          Latent dimensions
+          <select id="nDimensionsSelect" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:0.875rem;cursor:pointer;">
+            <option value="1" selected>1</option>
+            <option value="2">2</option>
+          </select>
+        </label>
         <button class="btn btn-primary" id="runBtn" onclick="sendData()" disabled>Run Analysis</button>
       </div>
 
@@ -407,54 +414,7 @@
       </div>
       <pre id="rawOutput"></pre>
 
-      <div class="charts-grid">
-
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-header-left">
-              <span class="chart-title">Outlet Bias</span>
-              <span class="chart-badge badge-z">z</span>
-            </div>
-            <div class="export-group">
-              <button class="btn-export" onclick="exportChartPNG('chartZ','outlet-bias-z')">PNG</button>
-              <button class="btn-export" onclick="exportChartSVG(chartZ,'outlet-bias-z')">SVG</button>
-            </div>
-          </div>
-          <p class="chart-desc">Latent score for each media outlet. The sign of <em>z</em> has no standalone meaning — what matters is its product with the subject's discrimination parameter <em>a</em>: if <em>z·a &gt; 0</em> the outlet reinforces positive sentiment toward that subject; if <em>z·a &lt; 0</em> it reinforces negative sentiment.</p>
-          <div class="chart-wrap" style="height:380px"><canvas id="chartZ"></canvas></div>
-        </div>
-
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-header-left">
-              <span class="chart-title">Subject Discrimination</span>
-              <span class="chart-badge badge-a">a</span>
-            </div>
-            <div class="export-group">
-              <button class="btn-export" onclick="exportChartPNG('chartA','subject-discrimination-a')">PNG</button>
-              <button class="btn-export" onclick="exportChartSVG(chartA,'subject-discrimination-a')">SVG</button>
-            </div>
-          </div>
-          <p class="chart-desc">Discrimination parameter for each subject. Like <em>z</em>, the sign of <em>a</em> is only meaningful in combination with an outlet's score: the product <em>z·a</em> determines the direction of reinforcement — positive means the outlet tends to cover the subject favourably, negative means unfavourably. Larger absolute values of <em>a</em> amplify this effect.</p>
-          <div class="chart-wrap"><canvas id="chartA"></canvas></div>
-        </div>
-
-        <div class="chart-card">
-          <div class="chart-header">
-            <div class="chart-header-left">
-              <span class="chart-title">Subject Baseline</span>
-              <span class="chart-badge badge-b">b</span>
-            </div>
-            <div class="export-group">
-              <button class="btn-export" onclick="exportChartPNG('chartB','subject-baseline-b')">PNG</button>
-              <button class="btn-export" onclick="exportChartSVG(chartB,'subject-baseline-b')">SVG</button>
-            </div>
-          </div>
-          <p class="chart-desc">Baseline sentiment for each subject, independent of which outlet covers it. A positive <em>b</em> indicates a general tendency across all outlets to mention this subject positively; a negative <em>b</em> indicates an overall negative tendency.</p>
-          <div class="chart-wrap"><canvas id="chartB"></canvas></div>
-        </div>
-
-      </div>
+      <div class="charts-grid" id="chartsContainer"></div>
     </div>
 
   </div>

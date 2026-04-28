@@ -55,12 +55,11 @@ function toggleRaw() {
 }
 
 // ── Processing time estimate ─────────────────────────────────────
-// Rough heuristic based on differential_evolution cost: O(m · k · (m + 2k))
-// with popsize=25 and maxiter=1000.
-function estimateSeconds(data) {
+// Rough heuristic for L-BFGS-B with analytical gradient.
+function estimateSeconds(data, nDims) {
   const m = new Set(data.map(r => r.outlet)).size;
   const k = new Set(data.map(r => r.subject)).size;
-  return Math.max(2, Math.round(0.005 * m * k * (m + 2 * k)));
+  return Math.max(1, Math.round(0.001 * m * k * (m + 2 * k) * nDims));
 }
 
 let _timerInterval = null;
@@ -111,9 +110,12 @@ async function sendData() {
     return;
   }
 
+  const nDims = parseInt(document.getElementById("nDimensionsSelect").value, 10);
+  jsonData.n_dimensions = nDims;
+
   runBtn.disabled    = true;
   runBtn.textContent = "Running…";
-  startProgress(estimateSeconds(jsonData.data));
+  startProgress(estimateSeconds(jsonData.data, nDims));
 
   try {
     const response = await fetch("/analyze", {
