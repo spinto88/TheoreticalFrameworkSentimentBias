@@ -16,13 +16,13 @@ outlet i covering subject j follow a linear function of z[i]:
 
 Parameters are estimated by maximising a penalised log-likelihood
 (Gaussian regularisation on all parameters) using SciPy's
-differential evolution solver.
+L-BFGS-B gradient descent solver with an analytical gradient.
 """
 
 import json
 import numpy as np
 from numpy.typing import NDArray
-from scipy.optimize import differential_evolution, Bounds, OptimizeResult
+from scipy.optimize import minimize, Bounds, OptimizeResult
 from typing import List
 
 from src.schemas import AnalysisOutput, Mention, OutletScore, SubjectScore
@@ -165,12 +165,71 @@ def negative_log_likelihood(
     return -log_likelihood(x, mentions_matrix)
 
 
+def grad_negative_log_likelihood(
+    x: NDArray[np.float64],
+    mentions_matrix: NDArray[np.int_],
+) -> NDArray[np.float64]:
+    """Compute the gradient of the negative penalised log-likelihood.
+
+    Analytical gradient of :func:`negative_log_likelihood` with respect to
+    all parameters.  The intermediate weight for outlet *i* and subject *j*
+    is::
+
+        W_ij = (pos_ij - neg_ij) - N_ij * tanh(q_ij / 2) / 2 * 2
+
+    where ``q_ij = z[i] * a[j] + b[j]``.
+
+    Args:
+        x: Flat parameter vector of length ``m + 2k``.
+        mentions_matrix: Mention counts, shape ``(m, k, 3)``.
+
+    Returns:
+        Gradient vector of length ``m + 2k``.
+    """
+    n_rows: int = mentions_matrix.shape[0]
+    n_cols: int = mentions_matrix.shape[1]
+
+    z: NDArray[np.float64] = x[:n_rows]
+    a: NDArray[np.float64] = x[n_rows : n_rows + n_cols]
+    b: NDArray[np.float64] = x[n_rows + n_cols :]
+
+    grad_z: NDArray[np.float64] = np.zeros(n_rows)
+    grad_a: NDArray[np.float64] = np.zeros(n_cols)
+    grad_b: NDArray[np.float64] = np.zeros(n_cols)
+
+    for i in range(n_rows):
+        for j in range(n_cols):
+            q_ij: float = z[i] * a[j] + b[j]
+            N_ij: int = int(np.sum(mentions_matrix[i, j]))
+            W_ij: float = (
+                float(mentions_matrix[i, j, 2] - mentions_matrix[i, j, 0])
+                - N_ij * (np.exp(q_ij) - np.exp(-q_ij)) / (np.exp(q_ij) + 1 + np.exp(-q_ij))
+            )
+            grad_z[i] += W_ij * a[j]
+        grad_z[i] -= z[i]
+
+    for j in range(n_cols):
+        for i in range(n_rows):
+            q_ij = z[i] * a[j] + b[j]
+            N_ij = int(np.sum(mentions_matrix[i, j]))
+            W_ij = (
+                float(mentions_matrix[i, j, 2] - mentions_matrix[i, j, 0])
+                - N_ij * (np.exp(q_ij) - np.exp(-q_ij)) / (np.exp(q_ij) + 1 + np.exp(-q_ij))
+            )
+            grad_a[j] += W_ij * z[i]
+            grad_b[j] += W_ij
+        grad_a[j] -= a[j]
+        grad_b[j] -= b[j]
+
+    return -np.hstack([grad_z, grad_a, grad_b])
+
+
 def run_analysis(data: List[Mention]) -> AnalysisOutput:
     """Estimate latent bias parameters from a list of mention records.
 
     Builds the mention tensor, sets symmetric box constraints
-    ``[-5, 5]`` on all parameters, and runs differential evolution to
-    minimise the negative penalised log-likelihood.
+    ``[-5, 5]`` on all parameters, and runs L-BFGS-B to minimise the
+    negative penalised log-likelihood using an analytical gradient.
 
     Args:
         data: List of :class:`~src.schemas.Mention` objects covering one
@@ -188,12 +247,16 @@ def run_analysis(data: List[Mention]) -> AnalysisOutput:
 
     bounds: Bounds = Bounds([-5] * (m + 2 * k), [5] * (m + 2 * k))
 
-    solution: OptimizeResult = differential_evolution(
-        negative_log_likelihood,
+    x0: NDArray[np.float64] = np.random.normal(size=(m + 2 * k))
+
+    solution: OptimizeResult = minimize(
+        fun=negative_log_likelihood,
+        x0=x0,
         args=(mentions_matrix,),
+        method="L-BFGS-B",
+        jac=grad_negative_log_likelihood,
         bounds=bounds,
-        maxiter=1000,
-        popsize=25,
+        tol=1e-6,
     )
 
     z = solution.x[:m]

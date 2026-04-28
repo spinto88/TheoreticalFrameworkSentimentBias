@@ -1,5 +1,6 @@
 *.json
 !data/*.json
 *ipynb*
+!notebooks/*.ipynb
 env
 *cache*
