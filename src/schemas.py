@@ -87,3 +87,18 @@ class AnalysisOutput(BaseModel):
 
     outlets: List[OutletScore]
     subjects: List[SubjectScore]
+
+
+class GenerateInput(BaseModel):
+
+    """Request body for the /generate endpoint.
+
+    Attributes:
+        outlets: One :class:`OutletScore` per unique outlet in the input.
+        subjects: One :class:`SubjectScore` per unique subject in the input.
+        amount_of_mentions: number of mentions per outlet and subject.
+    """
+
+    outlets: List[OutletScore]
+    subjects: List[SubjectScore]
+    amount_of_mentions: int = Field(100, ge=0)

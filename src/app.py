@@ -16,8 +16,8 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.schemas import AnalysisInput, AnalysisOutput
-from src.service import run_analysis
+from src.schemas import AnalysisInput, AnalysisOutput, GenerateInput
+from src.service import run_analysis, generate_data
 
 app = FastAPI(
     title="Sentiment Bias Analyzer",
@@ -40,6 +40,19 @@ def analyze(input_data: AnalysisInput) -> AnalysisOutput:
     """
     return run_analysis(input_data.data, n_dims=input_data.n_dimensions)
 
+
+@app.post("/generate", response_model=AnalysisInput)
+def generate(input_data: GenerateInput) -> AnalysisInput:
+    """Generate synthetic data from a list of ideological scores of outlets and subjects
+
+    Args:
+        input_data: Request body containing expected
+          *z* scores per outlet and (*a*, *b*) parameters per subject.
+    Returns:
+        :class:`~src.schemas.Mention` observations.
+        
+    """
+    return generate_data(outlets = input_data.outlets, subjects = input_data.subjects, amount_of_mentions = input_data.amount_of_mentions)
 
 @app.get("/")
 def read_index() -> FileResponse:

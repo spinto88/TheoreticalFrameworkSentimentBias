@@ -33,9 +33,10 @@ import json
 import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import minimize, Bounds, OptimizeResult
+from scipy.stats import multinomial 
 from typing import List
 
-from src.schemas import AnalysisOutput, Mention, OutletScore, SubjectScore
+from src.schemas import AnalysisOutput, Mention, OutletScore, SubjectScore, AnalysisInput
 
 
 def build_tensor(
@@ -270,6 +271,53 @@ def run_analysis(data: List[Mention], n_dims: int = 1) -> AnalysisOutput:
 
     return build_output(outlets, subjects, z, a, b)
 
+
+def generate_mentions(q, n):
+    """ Generate n mentions given a ideological position q """
+    # Partition function
+    Q = lambda x: np.exp(-x) + 1 + np.exp(x)
+    # Probabilities of output -1, 0, or 1 
+    probabilities = np.array([np.exp(-q), 1, np.exp(q)]) / Q(q)
+
+    # Realization of the probabilistic process
+    mentions_realization = multinomial.rvs(n = n, p=probabilities)
+
+    return mentions_realization
+
+def generate_data(
+        outlets: List[dict],
+        subjects: List[dict],
+        amount_of_mentions: int = 100
+    ) -> AnalysisInput:
+
+    """Generate synthetic data given ideological scores """ 
+    n_outlets = len(outlets)
+    n_subjects = len(subjects)
+    
+    output_generate = {}
+    output_generate["data"] = []
+
+    idx_to_type: dict[int, str] = {0: "negative", 1: "neutral", 2: "positive"}
+
+    for i in range(n_outlets):
+        
+        for j in range(n_subjects):
+
+            qij = np.array(outlets[i]["z"]).dot(np.array(subjects[j]["a"])) + subjects[j]["b"]
+
+            mentions_ij = generate_mentions(qij, amount_of_mentions)
+
+            for k in range(3):
+                output_generate["data"].append(
+                    {"outlet": outlets[i]["outlet"], 
+                    "subject": subjects[j]["subject"], 
+                    "mention_type": idx_to_type[k],
+                    "amount_of_mentions": mentions_ij[k]}
+                    )
+                
+    output_generate["n_dimensions"] = len(outlets[0]["z"])
+
+    return output_generate
 
 if __name__ == "__main__":
     input_data = json.load(open("data/input.json", "r"))
