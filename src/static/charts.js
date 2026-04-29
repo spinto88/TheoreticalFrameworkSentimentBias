@@ -74,14 +74,46 @@ function renderAllCharts(data) {
   );
 }
 
+// Maps a point (x,y) in [-2.5,2.5]² to a color that fades from neutral gray
+// at the origin toward a distinct vertex color as it approaches each quadrant corner.
+// Q1(+,+)=red  Q2(-,+)=indigo  Q3(-,-)=teal  Q4(+,-)=amber
+function quadrantColor(x, y, alpha) {
+  const LIMIT = 2.5;
+  const nx = x / LIMIT;
+  const ny = y / LIMIT;
+
+  const vertices = [
+    { vx:  1, vy:  1, r: 239, g:  68, b:  68 },
+    { vx: -1, vy:  1, r:  99, g: 102, b: 241 },
+    { vx: -1, vy: -1, r:  16, g: 185, b: 129 },
+    { vx:  1, vy: -1, r: 245, g: 158, b:  11 },
+  ];
+
+  const nr = 160, ng = 160, nb = 160;
+
+  const t = Math.min(Math.sqrt(nx * nx + ny * ny) / Math.SQRT2, 1);
+
+  const weights = vertices.map(v => Math.max(0, nx * v.vx) * Math.max(0, ny * v.vy));
+  const totalW  = weights.reduce((s, w) => s + w, 0);
+
+  let cr = nr, cg = ng, cb = nb;
+  if (totalW > 1e-9) {
+    cr = weights.reduce((s, w, i) => s + w * vertices[i].r, 0) / totalW;
+    cg = weights.reduce((s, w, i) => s + w * vertices[i].g, 0) / totalW;
+    cb = weights.reduce((s, w, i) => s + w * vertices[i].b, 0) / totalW;
+  }
+
+  return `rgba(${Math.round(nr + t*(cr-nr))},${Math.round(ng + t*(cg-ng))},${Math.round(nb + t*(cb-nb))},${alpha})`;
+}
+
 function createScatterChart(canvasId, chartRef, outletNames, zVecs, subjectNames, aVecs) {
   if (chartRef) chartRef.destroy();
 
   const outletDataset = {
     label: "Outlets (z)",
     data: outletNames.map((name, i) => ({ x: zVecs[i][0], y: zVecs[i][1], name })),
-    backgroundColor: "rgba(99,102,241,0.75)",
-    borderColor: "#6366f1",
+    backgroundColor: zVecs.map(z => quadrantColor(z[0], z[1], 0.80)),
+    borderColor:     zVecs.map(z => quadrantColor(z[0], z[1], 1.00)),
     borderWidth: 1.5,
     pointStyle: "circle",
     pointRadius: 9,
@@ -91,8 +123,8 @@ function createScatterChart(canvasId, chartRef, outletNames, zVecs, subjectNames
   const subjectDataset = {
     label: "Subjects (a)",
     data: subjectNames.map((name, i) => ({ x: aVecs[i][0], y: aVecs[i][1], name })),
-    backgroundColor: "rgba(16,185,129,0.75)",
-    borderColor: "#10b981",
+    backgroundColor: aVecs.map(a => quadrantColor(a[0], a[1], 0.80)),
+    borderColor:     aVecs.map(a => quadrantColor(a[0], a[1], 1.00)),
     borderWidth: 1.5,
     pointStyle: "rect",
     pointRadius: 9,
