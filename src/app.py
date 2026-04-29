@@ -8,6 +8,11 @@ POST /analyze
     returns an :class:`~src.schemas.AnalysisOutput` with estimated bias
     parameters.
 
+POST /generate
+    Accepts a JSON body matching :class:`~src.schemas.GenerateInput` and
+    returns an :class:`~src.schemas.AnalysisInput` with synthetic mention
+    data sampled from the generative model.
+
 GET /
     Serves the static frontend (``src/static/index.html``).
 """

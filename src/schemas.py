@@ -1,10 +1,17 @@
 """
-Pydantic schemas for the /analyze endpoint.
+Pydantic schemas for the /analyze and /generate endpoints.
 
-Request  : AnalysisInput  — wraps a list of Mention records plus the number
-           of latent dimensions (1 or 2) to fit.
-Response : AnalysisOutput — carries per-outlet and per-subject scores,
-           each expressed as a list of D floats (one per latent dimension).
+/analyze
+    Request  : AnalysisInput  — wraps a list of Mention records plus the number
+               of latent dimensions (1 or 2) to fit.
+    Response : AnalysisOutput — carries per-outlet and per-subject scores,
+               each expressed as a list of D floats (one per latent dimension).
+
+/generate
+    Request  : GenerateInput  — known latent parameters (z, a, b) plus the
+               desired number of mentions to draw per (outlet, subject) pair.
+    Response : AnalysisInput  — synthetic Mention records sampled from the
+               generative model.
 """
 
 from typing import List, Literal
@@ -90,13 +97,14 @@ class AnalysisOutput(BaseModel):
 
 
 class GenerateInput(BaseModel):
-
     """Request body for the /generate endpoint.
 
     Attributes:
-        outlets: One :class:`OutletScore` per unique outlet in the input.
-        subjects: One :class:`SubjectScore` per unique subject in the input.
-        amount_of_mentions: number of mentions per outlet and subject.
+        outlets: Latent bias scores for each outlet to simulate.
+        subjects: Discrimination and baseline parameters for each subject
+            to simulate.
+        amount_of_mentions: Total number of mentions to draw for each
+            (outlet, subject) pair.  Defaults to 100.
     """
 
     outlets: List[OutletScore]

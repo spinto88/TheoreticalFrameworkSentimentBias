@@ -18,10 +18,12 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 import pytest
 
-from src.schemas import AnalysisOutput, Mention
+from src.schemas import AnalysisInput, AnalysisOutput, Mention, OutletScore, SubjectScore
 from src.service import (
     build_output,
     build_tensor,
+    generate_data,
+    generate_mentions,
     grad_negative_log_likelihood,
     log_likelihood,
     negative_log_likelihood,
@@ -407,3 +409,116 @@ class TestRunAnalysis:
         assert len(result.outlets[0].z) == 2
         assert len(result.subjects[0].a) == 2
         assert isinstance(result.subjects[0].b, float)
+
+
+# ---------------------------------------------------------------------------
+# generate_mentions
+# ---------------------------------------------------------------------------
+
+OUTLETS_1D = [
+    OutletScore(outlet="A", z=[1.0]),
+    OutletScore(outlet="B", z=[-1.0]),
+]
+
+SUBJECTS_1D = [
+    SubjectScore(subject="X", a=[0.8], b=0.2),
+    SubjectScore(subject="Y", a=[-0.5], b=-0.1),
+]
+
+OUTLETS_2D = [
+    OutletScore(outlet="A", z=[1.0, 0.5]),
+    OutletScore(outlet="B", z=[-1.0, -0.5]),
+]
+
+SUBJECTS_2D = [
+    SubjectScore(subject="X", a=[0.8, 0.3], b=0.2),
+    SubjectScore(subject="Y", a=[-0.5, 0.1], b=-0.1),
+]
+
+
+class TestGenerateMentions:
+    def test_output_shape(self):
+        assert generate_mentions(q=0.0, n=100).shape == (3,)
+
+    def test_counts_sum_to_n(self):
+        for q in [-2.0, 0.0, 2.0]:
+            assert generate_mentions(q=q, n=200).sum() == 200
+
+    def test_all_counts_non_negative(self):
+        assert (generate_mentions(q=0.5, n=100) >= 0).all()
+
+    def test_positive_q_biases_toward_positive_mentions(self):
+        """With large positive q, positive count should dominate negative."""
+        result = generate_mentions(q=5.0, n=500)
+        assert result[2] > result[0]
+
+    def test_negative_q_biases_toward_negative_mentions(self):
+        """With large negative q, negative count should dominate positive."""
+        result = generate_mentions(q=-5.0, n=500)
+        assert result[0] > result[2]
+
+    def test_zero_n_returns_all_zeros(self):
+        result = generate_mentions(q=1.0, n=0)
+        assert result.sum() == 0
+        assert result.shape == (3,)
+
+
+# ---------------------------------------------------------------------------
+# generate_data
+# ---------------------------------------------------------------------------
+
+class TestGenerateData:
+    def test_returns_analysis_input(self):
+        assert isinstance(generate_data(OUTLETS_1D, SUBJECTS_1D, amount_of_mentions=10), AnalysisInput)
+
+    def test_n_dimensions_matches_z_length_1d(self):
+        result = generate_data(OUTLETS_1D, SUBJECTS_1D, amount_of_mentions=10)
+        assert result.n_dimensions == 1
+
+    def test_n_dimensions_matches_z_length_2d(self):
+        result = generate_data(OUTLETS_2D, SUBJECTS_2D, amount_of_mentions=10)
+        assert result.n_dimensions == 2
+
+    def test_data_row_count(self):
+        """n_outlets × n_subjects × 3 sentiment types."""
+        result = generate_data(OUTLETS_1D, SUBJECTS_1D, amount_of_mentions=10)
+        assert len(result.data) == len(OUTLETS_1D) * len(SUBJECTS_1D) * 3
+
+    def test_all_mention_types_present(self):
+        result = generate_data(OUTLETS_1D, SUBJECTS_1D, amount_of_mentions=10)
+        assert {m.mention_type for m in result.data} == {"negative", "neutral", "positive"}
+
+    def test_all_outlet_names_appear(self):
+        result = generate_data(OUTLETS_1D, SUBJECTS_1D, amount_of_mentions=10)
+        assert {m.outlet for m in result.data} == {o.outlet for o in OUTLETS_1D}
+
+    def test_all_subject_names_appear(self):
+        result = generate_data(OUTLETS_1D, SUBJECTS_1D, amount_of_mentions=10)
+        assert {m.subject for m in result.data} == {s.subject for s in SUBJECTS_1D}
+
+    def test_per_pair_totals_equal_amount_of_mentions(self):
+        from collections import defaultdict
+        n = 50
+        result = generate_data(OUTLETS_1D, SUBJECTS_1D, amount_of_mentions=n)
+        totals: dict = defaultdict(int)
+        for m in result.data:
+            totals[(m.outlet, m.subject)] += m.amount_of_mentions
+        for outlet in OUTLETS_1D:
+            for subject in SUBJECTS_1D:
+                assert totals[(outlet.outlet, subject.subject)] == n
+
+    def test_all_amounts_non_negative(self):
+        result = generate_data(OUTLETS_1D, SUBJECTS_1D, amount_of_mentions=20)
+        assert all(m.amount_of_mentions >= 0 for m in result.data)
+
+    def test_zero_amount_of_mentions(self):
+        result = generate_data(OUTLETS_1D, SUBJECTS_1D, amount_of_mentions=0)
+        assert all(m.amount_of_mentions == 0 for m in result.data)
+
+    def test_single_outlet_single_subject(self):
+        outlets = [OutletScore(outlet="Solo", z=[0.0])]
+        subjects = [SubjectScore(subject="Topic", a=[1.0], b=0.0)]
+        result = generate_data(outlets, subjects, amount_of_mentions=10)
+        assert len(result.data) == 3
+        assert {m.outlet for m in result.data} == {"Solo"}
+        assert {m.subject for m in result.data} == {"Topic"}

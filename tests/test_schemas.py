@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from src.schemas import (
     AnalysisInput,
     AnalysisOutput,
+    GenerateInput,
     Mention,
     OutletScore,
     SubjectScore,
@@ -182,3 +183,50 @@ class TestAnalysisOutput:
         output = AnalysisOutput(outlets=[], subjects=[])
         assert output.outlets == []
         assert output.subjects == []
+
+
+# ---------------------------------------------------------------------------
+# GenerateInput
+# ---------------------------------------------------------------------------
+
+class TestGenerateInput:
+    def _make(self, **kwargs):
+        defaults = dict(
+            outlets=[OutletScore(outlet="A", z=[1.0])],
+            subjects=[SubjectScore(subject="X", a=[0.8], b=0.2)],
+        )
+        return GenerateInput(**{**defaults, **kwargs})
+
+    def test_valid(self):
+        inp = self._make()
+        assert len(inp.outlets) == 1
+        assert len(inp.subjects) == 1
+
+    def test_default_amount_of_mentions_is_100(self):
+        assert self._make().amount_of_mentions == 100
+
+    def test_custom_amount_of_mentions(self):
+        assert self._make(amount_of_mentions=42).amount_of_mentions == 42
+
+    def test_zero_amount_of_mentions_is_valid(self):
+        assert self._make(amount_of_mentions=0).amount_of_mentions == 0
+
+    def test_negative_amount_of_mentions_raises(self):
+        with pytest.raises(ValidationError):
+            self._make(amount_of_mentions=-1)
+
+    def test_missing_outlets_raises(self):
+        with pytest.raises(ValidationError):
+            GenerateInput(subjects=[SubjectScore(subject="X", a=[0.8], b=0.2)])
+
+    def test_missing_subjects_raises(self):
+        with pytest.raises(ValidationError):
+            GenerateInput(outlets=[OutletScore(outlet="A", z=[1.0])])
+
+    def test_outlets_accept_two_dimensions(self):
+        inp = self._make(outlets=[OutletScore(outlet="A", z=[1.0, 0.5])])
+        assert inp.outlets[0].z == pytest.approx([1.0, 0.5])
+
+    def test_subjects_accept_two_dimensions(self):
+        inp = self._make(subjects=[SubjectScore(subject="X", a=[0.8, 0.3], b=0.2)])
+        assert inp.subjects[0].a == pytest.approx([0.8, 0.3])

@@ -272,52 +272,75 @@ def run_analysis(data: List[Mention], n_dims: int = 1) -> AnalysisOutput:
     return build_output(outlets, subjects, z, a, b)
 
 
-def generate_mentions(q, n):
-    """ Generate n mentions given a ideological position q """
-    # Partition function
-    Q = lambda x: np.exp(-x) + 1 + np.exp(x)
-    # Probabilities of output -1, 0, or 1 
-    probabilities = np.array([np.exp(-q), 1, np.exp(q)]) / Q(q)
+def generate_mentions(q: float, n: int) -> NDArray[np.int_]:
+    """Draw multinomial mention counts for a single (outlet, subject) pair.
 
-    # Realization of the probabilistic process
-    mentions_realization = multinomial.rvs(n = n, p=probabilities)
+    The probability of each sentiment category is derived from the
+    log-odds ``q`` via the three-category model::
 
-    return mentions_realization
+        P(negative) = exp(-q) / Z
+        P(neutral)  = 1       / Z
+        P(positive) = exp( q) / Z
+        Z           = exp(-q) + 1 + exp(q)
+
+    Args:
+        q: Log-odds value for this (outlet, subject) pair,
+            ``q_ij = dot(z_i, a_j) + b_j``.
+        n: Total number of mentions to draw.
+
+    Returns:
+        Array of shape ``(3,)`` with integer counts for
+        (negative, neutral, positive) mentions summing to *n*.
+    """
+    Z = np.exp(-q) + 1 + np.exp(q)
+    probabilities = np.array([np.exp(-q), 1, np.exp(q)]) / Z
+    return multinomial.rvs(n=n, p=probabilities)
+
 
 def generate_data(
-        outlets: List[dict],
-        subjects: List[dict],
-        amount_of_mentions: int = 100
+        outlets: List[OutletScore],
+        subjects: List[SubjectScore],
+        amount_of_mentions: int = 100,
     ) -> AnalysisInput:
+    """Generate synthetic mention data from known ideological parameters.
 
-    """Generate synthetic data given ideological scores """ 
-    n_outlets = len(outlets)
-    n_subjects = len(subjects)
-    
-    output_generate = {}
-    output_generate["data"] = []
+    Simulates the generative model: for each (outlet, subject) pair,
+    computes ``q_ij = dot(z_i, a_j) + b_j`` and draws *amount_of_mentions*
+    mentions from the resulting multinomial distribution.
 
+    Args:
+        outlets: Latent bias scores for each outlet, each carrying a name
+            and a bias vector *z* of length D.
+        subjects: Discrimination and baseline parameters for each subject,
+            each carrying a name, a discrimination vector *a* of length D,
+            and a scalar baseline *b*.
+        amount_of_mentions: Total number of mentions to draw for each
+            (outlet, subject) pair.  Defaults to 100.
+
+    Returns:
+        An :class:`~src.schemas.AnalysisInput` containing one
+        :class:`~src.schemas.Mention` row per (outlet, subject, sentiment)
+        combination and ``n_dimensions`` set to the dimensionality of the
+        input bias vectors.
+    """
     idx_to_type: dict[int, str] = {0: "negative", 1: "neutral", 2: "positive"}
+    mentions: list[dict] = []
 
-    for i in range(n_outlets):
-        
-        for j in range(n_subjects):
-
-            qij = np.array(outlets[i]["z"]).dot(np.array(subjects[j]["a"])) + subjects[j]["b"]
-
-            mentions_ij = generate_mentions(qij, amount_of_mentions)
-
+    for outlet in outlets:
+        for subject in subjects:
+            qij = np.array(outlet.z).dot(np.array(subject.a)) + subject.b
+            counts = generate_mentions(qij, amount_of_mentions)
             for k in range(3):
-                output_generate["data"].append(
-                    {"outlet": outlets[i]["outlet"], 
-                    "subject": subjects[j]["subject"], 
-                    "mention_type": idx_to_type[k],
-                    "amount_of_mentions": mentions_ij[k]}
-                    )
-                
-    output_generate["n_dimensions"] = len(outlets[0]["z"])
+                mentions.append(
+                    {
+                        "outlet": outlet.outlet,
+                        "subject": subject.subject,
+                        "mention_type": idx_to_type[k],
+                        "amount_of_mentions": int(counts[k]),
+                    }
+                )
 
-    return output_generate
+    return AnalysisInput(data=mentions, n_dimensions=len(outlets[0].z))
 
 if __name__ == "__main__":
     input_data = json.load(open("data/input.json", "r"))
