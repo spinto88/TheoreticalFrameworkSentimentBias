@@ -146,12 +146,16 @@ function createScatterChart(canvasId, chartRef, outletNames, zVecs, subjectNames
           grid:  { color: "rgba(0,0,0,0.06)" },
           border: { color: "#d1d5db" },
           ticks: { color: "#4b5563", font: { size: 13 } },
+          min: -2.5,
+          max:  2.5,
         },
         y: {
           title: { ...axisTitleStyle, text: "Dimension 2" },
           grid:  { color: "rgba(0,0,0,0.06)" },
           border: { color: "#d1d5db" },
           ticks: { color: "#4b5563", font: { size: 13 } },
+          min: -2.5,
+          max:  2.5,
         }
       }
     }
