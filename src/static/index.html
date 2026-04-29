@@ -416,8 +416,8 @@
 
       <div class="charts-grid">
 
-        <!-- Dimension 1 — always visible -->
-        <div class="chart-card">
+        <!-- Dimension 1 — visible only in 1D mode -->
+        <div class="chart-card" id="cardZ1">
           <div class="chart-header">
             <div class="chart-header-left">
               <span class="chart-title" id="titleZ1">Outlet Bias</span>
@@ -431,7 +431,7 @@
           <div class="chart-wrap" style="height:380px"><canvas id="chartZ1"></canvas></div>
         </div>
 
-        <div class="chart-card">
+        <div class="chart-card" id="cardA1">
           <div class="chart-header">
             <div class="chart-header-left">
               <span class="chart-title" id="titleA1">Subject Discrimination</span>
@@ -445,7 +445,23 @@
           <div class="chart-wrap"><canvas id="chartA1"></canvas></div>
         </div>
 
-        <!-- Dimension 2 — hidden unless n_dimensions=2 -->
+        <!-- 2D scatter — visible only in 2D mode, combines outlets (z) and subjects (a) -->
+        <div class="chart-card" id="card2DScatter" style="display:none">
+          <div class="chart-header">
+            <div class="chart-header-left">
+              <span class="chart-title">Latent Space</span>
+              <span class="chart-badge badge-z">z</span>
+              <span class="chart-badge badge-a">a</span>
+            </div>
+            <div class="export-group">
+              <button class="btn-export" onclick="exportChartPNG('chart2DScatter','latent-space-2d')">PNG</button>
+            </div>
+          </div>
+          <p class="chart-desc">Circles = media outlets (z&#8321;, z&#8322;) &nbsp;&bull;&nbsp; Squares = subjects (a&#8321;, a&#8322;)</p>
+          <div class="chart-wrap" style="height:460px"><canvas id="chart2DScatter"></canvas></div>
+        </div>
+
+        <!-- Dimension 2 bar charts — kept in DOM but never shown (replaced by scatter) -->
         <div class="chart-card" id="cardZ2" style="display:none">
           <div class="chart-header">
             <div class="chart-header-left">

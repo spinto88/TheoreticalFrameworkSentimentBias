@@ -17,15 +17,13 @@ function exportChartPNG(canvasId, filename) {
 }
 
 function exportAllCharts() {
-  const dim2Visible =
-    typeof chartZ2 !== "undefined" &&
-    document.getElementById("cardZ2") &&
-    document.getElementById("cardZ2").style.display !== "none";
+  const scatter2DVisible =
+    document.getElementById("card2DScatter") &&
+    document.getElementById("card2DScatter").style.display !== "none";
   const pairs = [
-    ["chartZ1", "outlet-bias-z1"],
-    ["chartA1", "subject-discrimination-a1"],
-    ...(dim2Visible ? [["chartZ2", "outlet-bias-z2"], ["chartA2", "subject-discrimination-a2"]] : []),
-    ["chartB",  "subject-baseline-b"],
+    ...(!scatter2DVisible ? [["chartZ1", "outlet-bias-z1"], ["chartA1", "subject-discrimination-a1"]] : []),
+    ...(scatter2DVisible  ? [["chart2DScatter", "latent-space-2d"]] : []),
+    ["chartB", "subject-baseline-b"],
   ];
   pairs.forEach(([id, name], i) =>
     setTimeout(() => exportChartPNG(id, name), i * 250)
