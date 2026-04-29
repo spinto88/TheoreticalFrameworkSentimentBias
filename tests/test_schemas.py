@@ -175,14 +175,23 @@ class TestAnalysisOutput:
         output = AnalysisOutput(
             outlets=[OutletScore(outlet="A", z=[1.0])],
             subjects=[SubjectScore(subject="X", a=[0.5], b=-0.1)],
+            loss=3.14,
         )
         assert len(output.outlets) == 1
         assert len(output.subjects) == 1
 
+    def test_loss_is_stored(self):
+        output = AnalysisOutput(outlets=[], subjects=[], loss=7.5)
+        assert output.loss == pytest.approx(7.5)
+
     def test_empty_lists_are_valid(self):
-        output = AnalysisOutput(outlets=[], subjects=[])
+        output = AnalysisOutput(outlets=[], subjects=[], loss=0.0)
         assert output.outlets == []
         assert output.subjects == []
+
+    def test_missing_loss_raises(self):
+        with pytest.raises(ValidationError):
+            AnalysisOutput(outlets=[], subjects=[])
 
 
 # ---------------------------------------------------------------------------

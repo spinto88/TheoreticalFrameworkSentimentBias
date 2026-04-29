@@ -85,6 +85,7 @@ def build_output(
     z: NDArray[np.float64],
     a: NDArray[np.float64],
     b: NDArray[np.float64],
+    loss: float,
 ) -> AnalysisOutput:
     """Assemble the API response object from estimated parameters.
 
@@ -94,6 +95,8 @@ def build_output(
         z: Estimated bias scores, shape ``(m, D)``.
         a: Estimated discrimination parameters, shape ``(k, D)``.
         b: Estimated baseline sentiment parameters, shape ``(k,)`` — scalar per subject.
+        loss: Final value of the minimised objective (``solution.fun`` from
+            L-BFGS-B).  Lower values indicate a better fit.
 
     Returns:
         An :class:`~src.schemas.AnalysisOutput` instance ready for
@@ -107,7 +110,7 @@ def build_output(
         SubjectScore(subject=subjects[j], a=a[j].tolist(), b=float(b[j]))
         for j in range(len(subjects))
     ]
-    return AnalysisOutput(outlets=outlet_scores, subjects=subject_scores)
+    return AnalysisOutput(outlets=outlet_scores, subjects=subject_scores, loss=float(loss))
 
 
 def log_likelihood(
@@ -269,7 +272,7 @@ def run_analysis(data: List[Mention], n_dims: int = 1) -> AnalysisOutput:
     a = solution.x[m * n_dims : (m + k) * n_dims].reshape(k, n_dims)
     b = solution.x[(m + k) * n_dims :]
 
-    return build_output(outlets, subjects, z, a, b)
+    return build_output(outlets, subjects, z, a, b, loss=solution.fun)
 
 
 def generate_mentions(q: float, n: int) -> NDArray[np.int_]:

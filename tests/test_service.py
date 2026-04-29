@@ -139,13 +139,16 @@ class TestBuildTensor:
 class TestBuildOutput:
     """build_output receives z/a as (m/k, D) arrays and b as (k,) scalar array."""
 
+    def _call(self, outlets, subjects, z, a, b, loss=0.0):
+        return build_output(outlets, subjects, z, a, b, loss=loss)
+
     def test_outlet_names_match(self):
         outlets = ["A", "B", "C"]
         subjects = ["X"]
         z = np.array([[1.0], [-0.5], [0.2]])   # (3, 1)
         a = np.array([[0.8]])                   # (1, 1)
         b = np.array([-0.3])                    # (1,)
-        result = build_output(outlets, subjects, z, a, b)
+        result = self._call(outlets, subjects, z, a, b)
         assert [o.outlet for o in result.outlets] == outlets
 
     def test_subject_names_match(self):
@@ -154,13 +157,13 @@ class TestBuildOutput:
         z = np.array([[0.5]])                   # (1, 1)
         a = np.array([[1.0], [-1.0]])           # (2, 1)
         b = np.array([0.1, 0.2])                # (2,)
-        result = build_output(outlets, subjects, z, a, b)
+        result = self._call(outlets, subjects, z, a, b)
         assert [s.subject for s in result.subjects] == subjects
 
     def test_z_values_assigned_correctly(self):
         outlets = ["A", "B"]
         z = np.array([[2.5], [-1.1]])           # (2, 1)
-        result = build_output(outlets, ["X"], z, np.array([[0.0]]), np.array([0.0]))
+        result = self._call(outlets, ["X"], z, np.array([[0.0]]), np.array([0.0]))
         assert result.outlets[0].z == pytest.approx([2.5])
         assert result.outlets[1].z == pytest.approx([-1.1])
 
@@ -168,7 +171,7 @@ class TestBuildOutput:
         subjects = ["X", "Y"]
         a = np.array([[0.7], [-0.3]])           # (2, 1)
         b = np.array([1.2, 0.4])                # (2,)
-        result = build_output(["A"], subjects, np.array([[0.0]]), a, b)
+        result = self._call(["A"], subjects, np.array([[0.0]]), a, b)
         assert result.subjects[0].a == pytest.approx([0.7])
         assert result.subjects[0].b == pytest.approx(1.2)
         assert result.subjects[1].a == pytest.approx([-0.3])
@@ -179,25 +182,30 @@ class TestBuildOutput:
         z = np.array([[1.0, 0.5], [-0.5, 0.3]])   # (2, 2)
         a = np.array([[0.8, 0.2]])                  # (1, 2)
         b = np.array([-0.1])                        # (1,) scalar
-        result = build_output(outlets, ["X"], z, a, b)
+        result = self._call(outlets, ["X"], z, a, b)
         assert result.outlets[0].z == pytest.approx([1.0, 0.5])
         assert result.outlets[1].z == pytest.approx([-0.5, 0.3])
         assert result.subjects[0].a == pytest.approx([0.8, 0.2])
         assert result.subjects[0].b == pytest.approx(-0.1)
 
     def test_b_is_scalar_float(self):
-        result = build_output(["A"], ["X"], np.array([[0.0]]), np.array([[0.5]]), np.array([-0.5]))
+        result = self._call(["A"], ["X"], np.array([[0.0]]), np.array([[0.5]]), np.array([-0.5]))
         assert isinstance(result.subjects[0].b, float)
 
     def test_z_and_a_are_lists_of_python_floats(self):
-        result = build_output(["A"], ["X"], np.array([[1.0]]), np.array([[0.5]]), np.array([-0.5]))
+        result = self._call(["A"], ["X"], np.array([[1.0]]), np.array([[0.5]]), np.array([-0.5]))
         assert isinstance(result.outlets[0].z, list)
         assert all(type(v) is float for v in result.outlets[0].z)
         assert isinstance(result.subjects[0].a, list)
         assert all(type(v) is float for v in result.subjects[0].a)
 
+    def test_loss_is_stored_as_float(self):
+        result = self._call(["A"], ["X"], np.array([[0.0]]), np.array([[0.0]]), np.array([0.0]), loss=7.5)
+        assert result.loss == pytest.approx(7.5)
+        assert isinstance(result.loss, float)
+
     def test_returns_analysis_output_instance(self):
-        result = build_output(["A"], ["X"], np.array([[0.0]]), np.array([[0.0]]), np.array([0.0]))
+        result = self._call(["A"], ["X"], np.array([[0.0]]), np.array([[0.0]]), np.array([0.0]))
         assert isinstance(result, AnalysisOutput)
 
 
@@ -310,9 +318,10 @@ class TestGradNegativeLogLikelihood:
 class TestRunAnalysis:
     """Tests for run_analysis with minimize patched out."""
 
-    def _mock_solution(self, m: int, k: int, n_dims: int = 1) -> MagicMock:
+    def _mock_solution(self, m: int, k: int, n_dims: int = 1, fun: float = 5.0) -> MagicMock:
         mock = MagicMock()
         mock.x = np.random.default_rng(42).uniform(-1, 1, n_params(m, k, n_dims))
+        mock.fun = fun
         return mock
 
     @patch("src.service.minimize")
@@ -409,6 +418,13 @@ class TestRunAnalysis:
         assert len(result.outlets[0].z) == 2
         assert len(result.subjects[0].a) == 2
         assert isinstance(result.subjects[0].b, float)
+
+    @patch("src.service.minimize")
+    def test_loss_comes_from_solution_fun(self, mock_min):
+        mock_min.return_value = self._mock_solution(1, 1, fun=42.0)
+        result = run_analysis([make_mention("A", "X", "positive", 1)])
+        assert result.loss == pytest.approx(42.0)
+        assert isinstance(result.loss, float)
 
 
 # ---------------------------------------------------------------------------

@@ -32,6 +32,7 @@ VALID_PAYLOAD = {
 MOCK_OUTPUT = AnalysisOutput(
     outlets=[OutletScore(outlet="A", z=[1.0]), OutletScore(outlet="B", z=[-0.5])],
     subjects=[SubjectScore(subject="X", a=[0.8], b=0.2), SubjectScore(subject="Y", a=[-0.3], b=0.1)],
+    loss=12.34,
 )
 
 

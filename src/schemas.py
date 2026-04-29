@@ -90,10 +90,13 @@ class AnalysisOutput(BaseModel):
     Attributes:
         outlets: One :class:`OutletScore` per unique outlet in the input.
         subjects: One :class:`SubjectScore` per unique subject in the input.
+        loss: Final value of the minimised objective (negative penalised
+            log-likelihood).  Lower values indicate a better fit.
     """
 
     outlets: List[OutletScore]
     subjects: List[SubjectScore]
+    loss: float
 
 
 class GenerateInput(BaseModel):
