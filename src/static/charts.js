@@ -74,11 +74,11 @@ function renderAllCharts(data) {
   );
 }
 
-// Maps a point (x,y) in [-2.5,2.5]² to a color that fades from neutral gray
+// Maps a point (x,y) in [-2,2]² to a color that fades from neutral gray
 // at the origin toward a distinct vertex color as it approaches each quadrant corner.
 // Q1(+,+)=red  Q2(-,+)=indigo  Q3(-,-)=teal  Q4(+,-)=amber
 function quadrantColor(x, y, alpha) {
-  const LIMIT = 2.5;
+  const LIMIT = 2;
   const nx = x / LIMIT;
   const ny = y / LIMIT;
 
@@ -178,16 +178,16 @@ function createScatterChart(canvasId, chartRef, outletNames, zVecs, subjectNames
           grid:  { color: "rgba(0,0,0,0.06)" },
           border: { color: "#d1d5db" },
           ticks: { color: "#4b5563", font: { size: 13 } },
-          min: -2.5,
-          max:  2.5,
+          min: -2.0,
+          max:  2.0,
         },
         y: {
           title: { ...axisTitleStyle, text: "Dimension 2" },
           grid:  { color: "rgba(0,0,0,0.06)" },
           border: { color: "#d1d5db" },
           ticks: { color: "#4b5563", font: { size: 13 } },
-          min: -2.5,
-          max:  2.5,
+          min: -2.0,
+          max:  2.0,
         }
       }
     }
