@@ -1,0 +1,13 @@
+env/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+tests/
+notebooks/
+images/
+Paper/
+server.pid
+server.log
+.git/
+.gitignore
