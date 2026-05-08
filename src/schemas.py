@@ -92,11 +92,13 @@ class AnalysisOutput(BaseModel):
         subjects: One :class:`SubjectScore` per unique subject in the input.
         loss: Final value of the minimised objective (negative penalised
             log-likelihood).  Lower values indicate a better fit.
+        bic: Bayesian Information Criteria. Final value of the minimised objective but penalizing the dimensionality of the model.  Lower values indicate a better fit.
     """
 
     outlets: List[OutletScore]
     subjects: List[SubjectScore]
     loss: float
+    bic: float
 
 
 class GenerateInput(BaseModel):
