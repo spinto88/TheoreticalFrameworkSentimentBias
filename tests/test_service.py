@@ -20,6 +20,7 @@ import pytest
 
 from src.schemas import AnalysisInput, AnalysisOutput, Mention, OutletScore, SubjectScore
 from src.service import (
+    aproximate_bayesian_information_criteria,
     build_output,
     build_tensor,
     generate_data,
@@ -133,14 +134,61 @@ class TestBuildTensor:
 
 
 # ---------------------------------------------------------------------------
+# aproximate_bayesian_information_criteria
+# ---------------------------------------------------------------------------
+
+class TestApproximateBIC:
+    """Unit tests for the BIC formula: 2*neglogl + n_params*ln(n_data)."""
+
+    def test_known_value_zero_penalty(self):
+        # ln(1) == 0, so penalty term vanishes
+        assert aproximate_bayesian_information_criteria(5.0, 4, 1) == pytest.approx(10.0)
+
+    def test_known_value_e_data(self):
+        # ln(e) == 1, so bic = 2*neglogl + n_params
+        assert aproximate_bayesian_information_criteria(3.0, 4, int(np.e * 1e6) // int(1e6)) == pytest.approx(
+            2 * 3.0 + 4 * np.log(int(np.e * 1e6) // int(1e6)), rel=1e-3
+        )
+
+    def test_known_value_explicit(self):
+        neglogl, n_params, n_data = 7.0, 3, 100
+        expected = 2 * 7.0 + 3 * np.log(100)
+        assert aproximate_bayesian_information_criteria(neglogl, n_params, n_data) == pytest.approx(expected)
+
+    def test_returns_float(self):
+        result = aproximate_bayesian_information_criteria(1.0, 2, 10)
+        assert isinstance(result, float)
+
+    def test_result_is_finite(self):
+        assert np.isfinite(aproximate_bayesian_information_criteria(5.0, 6, 50))
+
+    def test_increases_with_more_parameters(self):
+        # Same neglogl and n_data, more parameters → larger BIC
+        bic_few = aproximate_bayesian_information_criteria(5.0, 3, 100)
+        bic_many = aproximate_bayesian_information_criteria(5.0, 10, 100)
+        assert bic_many > bic_few
+
+    def test_increases_with_higher_neglogl(self):
+        bic_low = aproximate_bayesian_information_criteria(2.0, 4, 50)
+        bic_high = aproximate_bayesian_information_criteria(10.0, 4, 50)
+        assert bic_high > bic_low
+
+    def test_zero_neglogl_equals_penalty_term(self):
+        n_params, n_data = 5, 20
+        assert aproximate_bayesian_information_criteria(0.0, n_params, n_data) == pytest.approx(
+            n_params * np.log(n_data)
+        )
+
+
+# ---------------------------------------------------------------------------
 # build_output
 # ---------------------------------------------------------------------------
 
 class TestBuildOutput:
     """build_output receives z/a as (m/k, D) arrays and b as (k,) scalar array."""
 
-    def _call(self, outlets, subjects, z, a, b, loss=0.0):
-        return build_output(outlets, subjects, z, a, b, loss=loss)
+    def _call(self, outlets, subjects, z, a, b, loss=0.0, bic=0.0):
+        return build_output(outlets, subjects, z, a, b, loss=loss, bic=bic)
 
     def test_outlet_names_match(self):
         outlets = ["A", "B", "C"]
@@ -203,6 +251,16 @@ class TestBuildOutput:
         result = self._call(["A"], ["X"], np.array([[0.0]]), np.array([[0.0]]), np.array([0.0]), loss=7.5)
         assert result.loss == pytest.approx(7.5)
         assert isinstance(result.loss, float)
+
+    def test_bic_is_stored_as_float(self):
+        result = self._call(["A"], ["X"], np.array([[0.0]]), np.array([[0.0]]), np.array([0.0]), bic=12.3)
+        assert result.bic == pytest.approx(12.3)
+        assert isinstance(result.bic, float)
+
+    def test_bic_independent_of_loss(self):
+        r1 = self._call(["A"], ["X"], np.array([[0.0]]), np.array([[0.0]]), np.array([0.0]), loss=1.0, bic=5.0)
+        r2 = self._call(["A"], ["X"], np.array([[0.0]]), np.array([[0.0]]), np.array([0.0]), loss=9.0, bic=5.0)
+        assert r1.bic == r2.bic
 
     def test_returns_analysis_output_instance(self):
         result = self._call(["A"], ["X"], np.array([[0.0]]), np.array([[0.0]]), np.array([0.0]))
@@ -425,6 +483,53 @@ class TestRunAnalysis:
         result = run_analysis([make_mention("A", "X", "positive", 1)])
         assert result.loss == pytest.approx(42.0)
         assert isinstance(result.loss, float)
+
+    @patch("src.service.minimize")
+    def test_bic_is_float_in_output(self, mock_min):
+        mock_min.return_value = self._mock_solution(1, 1, fun=5.0)
+        result = run_analysis([make_mention("A", "X", "positive", 10)])
+        assert isinstance(result.bic, float)
+        assert np.isfinite(result.bic)
+
+    @patch("src.service.minimize")
+    def test_bic_matches_formula(self, mock_min):
+        """BIC = 2*loss + n_params*ln(n_mentions)."""
+        data = [
+            make_mention("A", "X", "positive", 10),
+            make_mention("A", "X", "negative", 5),
+        ]
+        # m=1, k=1, n_dims=1 → n_params=3; n_mentions=15
+        mock_min.return_value = self._mock_solution(1, 1, fun=7.0)
+        result = run_analysis(data)
+        expected_bic = 2 * 7.0 + 3 * np.log(15)
+        assert result.bic == pytest.approx(expected_bic)
+
+    @patch("src.service.minimize")
+    def test_bic_larger_with_more_dimensions(self, mock_min):
+        """For same data and loss, 2D model has more parameters so BIC is larger."""
+        data = [
+            make_mention("A", "X", "positive", 8),
+            make_mention("B", "Y", "negative", 4),
+        ]
+        # m=2, k=2: n_params_1d=(2+2)*1+2=6, n_params_2d=(2+2)*2+2=10
+        mock_min.return_value = self._mock_solution(2, 2, n_dims=1, fun=5.0)
+        result_1d = run_analysis(data, n_dims=1)
+
+        mock_min.return_value = self._mock_solution(2, 2, n_dims=2, fun=5.0)
+        result_2d = run_analysis(data, n_dims=2)
+
+        assert result_2d.bic > result_1d.bic
+
+    @patch("src.service.minimize")
+    def test_bic_increases_with_higher_loss(self, mock_min):
+        data = [make_mention("A", "X", "positive", 10)]
+        mock_min.return_value = self._mock_solution(1, 1, fun=3.0)
+        result_low = run_analysis(data)
+
+        mock_min.return_value = self._mock_solution(1, 1, fun=20.0)
+        result_high = run_analysis(data)
+
+        assert result_high.bic > result_low.bic
 
 
 # ---------------------------------------------------------------------------

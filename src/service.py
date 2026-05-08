@@ -86,6 +86,7 @@ def build_output(
     a: NDArray[np.float64],
     b: NDArray[np.float64],
     loss: float,
+    bic: float
 ) -> AnalysisOutput:
     """Assemble the API response object from estimated parameters.
 
@@ -97,6 +98,7 @@ def build_output(
         b: Estimated baseline sentiment parameters, shape ``(k,)`` — scalar per subject.
         loss: Final value of the minimised objective (``solution.fun`` from
             L-BFGS-B).  Lower values indicate a better fit.
+        bic: Bayesian Information Criteria. It penalizes the dimensionality of the model. Lower values indicate a better fit. 
 
     Returns:
         An :class:`~src.schemas.AnalysisOutput` instance ready for
@@ -110,7 +112,7 @@ def build_output(
         SubjectScore(subject=subjects[j], a=a[j].tolist(), b=float(b[j]))
         for j in range(len(subjects))
     ]
-    return AnalysisOutput(outlets=outlet_scores, subjects=subject_scores, loss=float(loss))
+    return AnalysisOutput(outlets=outlet_scores, subjects=subject_scores, loss=float(loss), bic=float(bic))
 
 
 def log_likelihood(
@@ -177,6 +179,20 @@ def negative_log_likelihood(
     """
     return -log_likelihood(x, mentions_matrix, n_dims)
 
+def aproximate_bayesian_information_criteria(neglogl: float, number_of_parameters: int, n_data: int) -> float:
+
+    """ Return the aproximate Bayesian Information Criteria.
+    It is an aproximation because we are assuming that priors have little effects, so we say the log-posterior is very similar to log-likelihood. 
+
+    Args:
+        neglogl: Negative Log Likelihood.
+        number_of_parameters of the model: m * D + k * (D + 1) .
+        n_data: Amount of data, which in this case are the n independent mentions.
+    Returns:
+        ``BIC: Bayesian Information Criteria.
+    """
+    bic = 2 * neglogl + number_of_parameters * np.log(n_data)
+    return bic
 
 def grad_negative_log_likelihood(
     x: NDArray[np.float64],
@@ -254,6 +270,7 @@ def run_analysis(data: List[Mention], n_dims: int = 1) -> AnalysisOutput:
     m: int = len(outlets)
     k: int = len(subjects)
     n_params: int = (m + k) * n_dims + k
+    n_mentions: int = mentions_matrix.sum()
 
     bounds: Bounds = Bounds([-5] * n_params, [5] * n_params)
     x0: NDArray[np.float64] = np.random.normal(size=n_params)
@@ -272,7 +289,9 @@ def run_analysis(data: List[Mention], n_dims: int = 1) -> AnalysisOutput:
     a = solution.x[m * n_dims : (m + k) * n_dims].reshape(k, n_dims)
     b = solution.x[(m + k) * n_dims :]
 
-    return build_output(outlets, subjects, z, a, b, loss=solution.fun)
+    bic = aproximate_bayesian_information_criteria(solution.fun, n_params, n_mentions)
+
+    return build_output(outlets, subjects, z, a, b, loss=solution.fun, bic=bic)
 
 
 def generate_mentions(q: float, n: int) -> NDArray[np.int_]:
