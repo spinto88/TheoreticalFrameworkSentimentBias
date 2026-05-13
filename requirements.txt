@@ -5,3 +5,5 @@ uvicorn
 pydantic
 pytest
 httpx
+jupyter
+matplotlib
