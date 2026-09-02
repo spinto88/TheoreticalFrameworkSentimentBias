@@ -393,6 +393,16 @@
         <button class="btn btn-primary" id="runBtn" onclick="sendData()" disabled>Run Analysis</button>
       </div>
 
+      <div class="input-row" style="justify-content:flex-start;margin-top:12px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.875rem;color:var(--muted);cursor:pointer;">
+          <input type="checkbox" id="fixedAEnabledCheckbox" style="cursor:pointer;" onchange="document.getElementById('fixedAInput').disabled = !this.checked;">
+          Fix subject discrimination (a) to
+        </label>
+        <input type="text" id="fixedAInput" placeholder="e.g. 1 or 1,0.5" disabled
+          style="width:140px;margin-left:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:0.875rem;">
+        <span style="margin-left:8px;font-size:0.78rem;color:var(--muted);">comma-separated, one value per latent dimension</span>
+      </div>
+
       <div id="progressSection">
         <div class="progress-header">
           <span id="progressElapsed">0.0s elapsed</span>

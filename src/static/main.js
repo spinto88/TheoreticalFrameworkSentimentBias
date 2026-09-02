@@ -123,6 +123,20 @@ async function sendData() {
 
   jsonData.ignore_neutral = document.getElementById("ignoreNeutralCheckbox").checked;
 
+  if (document.getElementById("fixedAEnabledCheckbox").checked) {
+    const rawValues = document.getElementById("fixedAInput").value
+      .split(",")
+      .map(v => v.trim())
+      .filter(v => v.length > 0)
+      .map(Number);
+
+    if (rawValues.length !== nDims || rawValues.some(Number.isNaN)) {
+      showError(`"Fix a" must have exactly ${nDims} comma-separated number(s) to match the latent dimensions.`);
+      return;
+    }
+    jsonData.fixed_a = rawValues;
+  }
+
   runBtn.disabled    = true;
   runBtn.textContent = "Running…";
   startProgress(estimateSeconds(jsonData.data, nDims, nRestarts));

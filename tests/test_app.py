@@ -126,6 +126,19 @@ class TestAnalyzeRoute:
         _, call_kwargs = mock_fn.call_args
         assert call_kwargs["ignore_neutral"] is True
 
+    @patch("src.app.run_analysis", return_value=MOCK_OUTPUT)
+    def test_default_fixed_a_forwarded_to_service(self, mock_fn):
+        client.post("/analyze", json=VALID_PAYLOAD)
+        _, call_kwargs = mock_fn.call_args
+        assert call_kwargs["fixed_a"] is None
+
+    @patch("src.app.run_analysis", return_value=MOCK_OUTPUT)
+    def test_custom_fixed_a_forwarded_to_service(self, mock_fn):
+        payload = {**VALID_PAYLOAD, "fixed_a": [0.5]}
+        client.post("/analyze", json=payload)
+        _, call_kwargs = mock_fn.call_args
+        assert call_kwargs["fixed_a"] == [0.5]
+
 
 # ---------------------------------------------------------------------------
 # POST /analyze — validation errors

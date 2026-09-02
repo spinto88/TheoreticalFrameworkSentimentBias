@@ -48,6 +48,7 @@ def analyze(input_data: AnalysisInput) -> AnalysisOutput:
         n_dims=input_data.n_dimensions,
         n_restarts=input_data.n_restarts,
         ignore_neutral=input_data.ignore_neutral,
+        fixed_a=input_data.fixed_a,
     )
 
 

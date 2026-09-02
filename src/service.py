@@ -268,6 +268,7 @@ def run_analysis(
     n_dims: int = 1,
     n_restarts: int = 1,
     ignore_neutral: bool = False,
+    fixed_a: List[float] | None = None,
 ) -> AnalysisOutput:
     """Estimate latent bias parameters from a list of mention records.
 
@@ -289,6 +290,11 @@ def run_analysis(
             (default 1). The restart achieving the lowest loss is returned.
         ignore_neutral: If True, neutral mention counts are treated as 0
             before fitting (default False).
+        fixed_a: If provided (length ``n_dims``), the discrimination vector
+            ``a`` is pinned to this value for every subject instead of
+            being estimated — implemented by collapsing its box bounds to
+            a single point, so L-BFGS-B never moves it. Defaults to None
+            (``a`` is estimated normally).
 
     Returns:
         An :class:`~src.schemas.AnalysisOutput` with estimated *z*
@@ -302,11 +308,22 @@ def run_analysis(
     n_params: int = (m + k) * n_dims + k
     n_mentions: int = mentions_matrix.sum()
 
-    bounds: Bounds = Bounds([-5] * n_params, [5] * n_params)
+    lower: List[float] = [-5] * n_params
+    upper: List[float] = [5] * n_params
+
+    if fixed_a is not None:
+        for j in range(k):
+            for d in range(n_dims):
+                idx = m * n_dims + j * n_dims + d
+                lower[idx] = upper[idx] = fixed_a[d]
+
+    bounds: Bounds = Bounds(lower, upper)
 
     best_solution: OptimizeResult | None = None
     for _ in range(n_restarts):
         x0: NDArray[np.float64] = np.random.normal(size=n_params)
+        if fixed_a is not None:
+            x0 = np.clip(x0, lower, upper)
 
         solution: OptimizeResult = minimize(
             fun=negative_log_likelihood,

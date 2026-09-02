@@ -16,9 +16,9 @@ Pydantic schemas for the /analyze and /generate endpoints.
                generative model.
 """
 
-from typing import List, Literal
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Mention(BaseModel):
@@ -54,12 +54,26 @@ class AnalysisInput(BaseModel):
         ignore_neutral: If True, neutral mention counts are treated as 0
             (excluded from the fit entirely) before the model is run.
             Defaults to False.
+        fixed_a: If provided, the discrimination vector ``a`` is held at
+            this fixed value (length D) for every subject instead of being
+            estimated. Must have exactly ``n_dimensions`` entries. Defaults
+            to None (``a`` is estimated normally).
     """
 
     data: List[Mention]
     n_dimensions: int = Field(1, ge=1, le=2)
     n_restarts: int = Field(1, ge=1)
     ignore_neutral: bool = False
+    fixed_a: Optional[List[float]] = None
+
+    @model_validator(mode="after")
+    def _check_fixed_a_length(self) -> "AnalysisInput":
+        if self.fixed_a is not None and len(self.fixed_a) != self.n_dimensions:
+            raise ValueError(
+                f"fixed_a must have exactly {self.n_dimensions} entries "
+                f"(one per latent dimension), got {len(self.fixed_a)}."
+            )
+        return self
 
 
 class OutletScore(BaseModel):

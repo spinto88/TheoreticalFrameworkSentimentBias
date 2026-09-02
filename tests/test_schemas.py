@@ -137,6 +137,26 @@ class TestAnalysisInput:
         inp = AnalysisInput(data=[], ignore_neutral=True)
         assert inp.ignore_neutral is True
 
+    def test_default_fixed_a_is_none(self):
+        inp = AnalysisInput(data=[])
+        assert inp.fixed_a is None
+
+    def test_fixed_a_matching_n_dimensions_1d_is_valid(self):
+        inp = AnalysisInput(data=[], n_dimensions=1, fixed_a=[0.5])
+        assert inp.fixed_a == [0.5]
+
+    def test_fixed_a_matching_n_dimensions_2d_is_valid(self):
+        inp = AnalysisInput(data=[], n_dimensions=2, fixed_a=[0.5, -1.2])
+        assert inp.fixed_a == [0.5, -1.2]
+
+    def test_fixed_a_wrong_length_raises(self):
+        with pytest.raises(ValidationError):
+            AnalysisInput(data=[], n_dimensions=1, fixed_a=[0.5, 1.0])
+
+    def test_fixed_a_wrong_length_for_default_dimensions_raises(self):
+        with pytest.raises(ValidationError):
+            AnalysisInput(data=[], fixed_a=[])
+
 
 # ---------------------------------------------------------------------------
 # OutletScore
