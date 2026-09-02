@@ -113,6 +113,22 @@ class TestAnalysisInput:
         with pytest.raises(ValidationError):
             AnalysisInput(data=[], n_dimensions=3)
 
+    def test_default_n_restarts_is_one(self):
+        inp = AnalysisInput(data=[])
+        assert inp.n_restarts == 1
+
+    def test_n_restarts_custom_value_is_valid(self):
+        inp = AnalysisInput(data=[], n_restarts=10)
+        assert inp.n_restarts == 10
+
+    def test_n_restarts_zero_raises(self):
+        with pytest.raises(ValidationError):
+            AnalysisInput(data=[], n_restarts=0)
+
+    def test_n_restarts_too_large_raises(self):
+        with pytest.raises(ValidationError):
+            AnalysisInput(data=[], n_restarts=51)
+
 
 # ---------------------------------------------------------------------------
 # OutletScore
@@ -176,22 +192,35 @@ class TestAnalysisOutput:
             outlets=[OutletScore(outlet="A", z=[1.0])],
             subjects=[SubjectScore(subject="X", a=[0.5], b=-0.1)],
             loss=3.14,
+            bic=9.42,
         )
         assert len(output.outlets) == 1
         assert len(output.subjects) == 1
 
     def test_loss_is_stored(self):
-        output = AnalysisOutput(outlets=[], subjects=[], loss=7.5)
+        output = AnalysisOutput(outlets=[], subjects=[], loss=7.5, bic=15.0)
         assert output.loss == pytest.approx(7.5)
 
     def test_empty_lists_are_valid(self):
-        output = AnalysisOutput(outlets=[], subjects=[], loss=0.0)
+        output = AnalysisOutput(outlets=[], subjects=[], loss=0.0, bic=0.0)
         assert output.outlets == []
         assert output.subjects == []
 
     def test_missing_loss_raises(self):
         with pytest.raises(ValidationError):
-            AnalysisOutput(outlets=[], subjects=[])
+            AnalysisOutput(outlets=[], subjects=[], bic=0.0)
+
+    def test_missing_bic_raises(self):
+        with pytest.raises(ValidationError):
+            AnalysisOutput(outlets=[], subjects=[], loss=0.0)
+
+    def test_default_n_restarts_is_one(self):
+        output = AnalysisOutput(outlets=[], subjects=[], loss=0.0, bic=0.0)
+        assert output.n_restarts == 1
+
+    def test_n_restarts_custom_value_is_stored(self):
+        output = AnalysisOutput(outlets=[], subjects=[], loss=0.0, bic=0.0, n_restarts=5)
+        assert output.n_restarts == 5
 
 
 # ---------------------------------------------------------------------------

@@ -33,6 +33,7 @@ MOCK_OUTPUT = AnalysisOutput(
     outlets=[OutletScore(outlet="A", z=[1.0]), OutletScore(outlet="B", z=[-0.5])],
     subjects=[SubjectScore(subject="X", a=[0.8], b=0.2), SubjectScore(subject="Y", a=[-0.3], b=0.1)],
     loss=12.34,
+    bic=20.5,
 )
 
 
@@ -99,6 +100,19 @@ class TestAnalyzeRoute:
         assert all(isinstance(v, (int, float)) for s in subjects for v in s["a"])
         assert all(isinstance(s["b"], (int, float)) for s in subjects)
 
+    @patch("src.app.run_analysis", return_value=MOCK_OUTPUT)
+    def test_default_n_restarts_forwarded_to_service(self, mock_fn):
+        client.post("/analyze", json=VALID_PAYLOAD)
+        _, call_kwargs = mock_fn.call_args
+        assert call_kwargs["n_restarts"] == 1
+
+    @patch("src.app.run_analysis", return_value=MOCK_OUTPUT)
+    def test_custom_n_restarts_forwarded_to_service(self, mock_fn):
+        payload = {**VALID_PAYLOAD, "n_restarts": 10}
+        client.post("/analyze", json=payload)
+        _, call_kwargs = mock_fn.call_args
+        assert call_kwargs["n_restarts"] == 10
+
 
 # ---------------------------------------------------------------------------
 # POST /analyze — validation errors
@@ -129,6 +143,16 @@ class TestAnalyzeValidation:
         payload = {
             "data": [{"subject": "X", "mention_type": "positive", "amount_of_mentions": 1}]
         }
+        response = client.post("/analyze", json=payload)
+        assert response.status_code == 422
+
+    def test_n_restarts_zero_returns_422(self):
+        payload = {**VALID_PAYLOAD, "n_restarts": 0}
+        response = client.post("/analyze", json=payload)
+        assert response.status_code == 422
+
+    def test_n_restarts_too_large_returns_422(self):
+        payload = {**VALID_PAYLOAD, "n_restarts": 51}
         response = client.post("/analyze", json=payload)
         assert response.status_code == 422
 

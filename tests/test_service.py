@@ -531,6 +531,69 @@ class TestRunAnalysis:
 
         assert result_high.bic > result_low.bic
 
+    @patch("src.service.minimize")
+    def test_default_n_restarts_is_one_call(self, mock_min):
+        mock_min.return_value = self._mock_solution(1, 1)
+        run_analysis([make_mention("A", "X", "positive", 1)])
+        assert mock_min.call_count == 1
+
+    @patch("src.service.minimize")
+    def test_n_restarts_calls_minimize_that_many_times(self, mock_min):
+        mock_min.return_value = self._mock_solution(1, 1)
+        run_analysis([make_mention("A", "X", "positive", 1)], n_restarts=4)
+        assert mock_min.call_count == 4
+
+    @patch("src.service.minimize")
+    def test_n_restarts_keeps_lowest_loss_solution(self, mock_min):
+        """Among several restarts, the one with the lowest solution.fun wins."""
+        solutions = [
+            self._mock_solution(1, 1, fun=9.0),
+            self._mock_solution(1, 1, fun=2.0),   # best
+            self._mock_solution(1, 1, fun=5.0),
+        ]
+        mock_min.side_effect = solutions
+        result = run_analysis([make_mention("A", "X", "positive", 1)], n_restarts=3)
+        assert result.loss == pytest.approx(2.0)
+        assert np.array(result.outlets[0].z) == pytest.approx(solutions[1].x[:1])
+
+    @patch("src.service.minimize")
+    def test_n_restarts_order_independent(self, mock_min):
+        """The best solution is picked regardless of where it falls in the sequence."""
+        solutions = [
+            self._mock_solution(1, 1, fun=1.0),   # best, appears first this time
+            self._mock_solution(1, 1, fun=4.0),
+            self._mock_solution(1, 1, fun=3.0),
+        ]
+        mock_min.side_effect = solutions
+        result = run_analysis([make_mention("A", "X", "positive", 1)], n_restarts=3)
+        assert result.loss == pytest.approx(1.0)
+
+    @patch("src.service.minimize")
+    def test_n_restarts_reported_in_output(self, mock_min):
+        mock_min.return_value = self._mock_solution(1, 1)
+        result = run_analysis([make_mention("A", "X", "positive", 1)], n_restarts=7)
+        assert result.n_restarts == 7
+
+    @patch("src.service.minimize")
+    def test_default_n_restarts_reported_in_output(self, mock_min):
+        mock_min.return_value = self._mock_solution(1, 1)
+        result = run_analysis([make_mention("A", "X", "positive", 1)])
+        assert result.n_restarts == 1
+
+    @patch("src.service.minimize")
+    def test_n_restarts_bic_uses_best_loss(self, mock_min):
+        """BIC in the output must be computed from the winning (lowest-loss) restart."""
+        solutions = [
+            self._mock_solution(1, 1, fun=9.0),
+            self._mock_solution(1, 1, fun=2.0),
+        ]
+        mock_min.side_effect = solutions
+        data = [make_mention("A", "X", "positive", 10)]
+        result = run_analysis(data, n_restarts=2)
+        n_params_ = n_params(1, 1, 1)
+        expected_bic = 2 * 2.0 + n_params_ * np.log(10)
+        assert result.bic == pytest.approx(expected_bic)
+
 
 # ---------------------------------------------------------------------------
 # generate_mentions

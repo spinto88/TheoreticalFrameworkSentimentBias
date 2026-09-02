@@ -55,11 +55,13 @@ function toggleRaw() {
 }
 
 // ── Processing time estimate ─────────────────────────────────────
-// Rough heuristic for L-BFGS-B with analytical gradient.
-function estimateSeconds(data, nDims) {
+// Rough heuristic for L-BFGS-B with analytical gradient. Each restart
+// re-runs the full optimisation from a new random start, so cost scales
+// ~linearly with nRestarts.
+function estimateSeconds(data, nDims, nRestarts) {
   const m = new Set(data.map(r => r.outlet)).size;
   const k = new Set(data.map(r => r.subject)).size;
-  return Math.max(1, Math.round(0.001 * m * k * (m + 2 * k) * nDims));
+  return Math.max(1, Math.round(0.001 * m * k * (m + 2 * k) * nDims * nRestarts));
 }
 
 let _timerInterval = null;
@@ -113,9 +115,16 @@ async function sendData() {
   const nDims = parseInt(document.getElementById("nDimensionsSelect").value, 10);
   jsonData.n_dimensions = nDims;
 
+  const restartsInput = document.getElementById("nRestartsInput");
+  let nRestarts = parseInt(restartsInput.value, 10);
+  if (!Number.isFinite(nRestarts) || nRestarts < 1) nRestarts = 1;
+  if (nRestarts > 50) nRestarts = 50;
+  restartsInput.value = nRestarts;
+  jsonData.n_restarts = nRestarts;
+
   runBtn.disabled    = true;
   runBtn.textContent = "Running…";
-  startProgress(estimateSeconds(jsonData.data, nDims));
+  startProgress(estimateSeconds(jsonData.data, nDims, nRestarts));
 
   try {
     const response = await fetch("/analyze", {

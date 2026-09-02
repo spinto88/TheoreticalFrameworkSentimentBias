@@ -43,7 +43,11 @@ def analyze(input_data: AnalysisInput) -> AnalysisOutput:
         Estimated *z* scores per outlet and (*a*, *b*) parameters per
         subject.
     """
-    return run_analysis(input_data.data, n_dims=input_data.n_dimensions)
+    return run_analysis(
+        input_data.data,
+        n_dims=input_data.n_dimensions,
+        n_restarts=input_data.n_restarts,
+    )
 
 
 @app.post("/generate", response_model=AnalysisInput)

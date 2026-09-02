@@ -3,9 +3,11 @@ Pydantic schemas for the /analyze and /generate endpoints.
 
 /analyze
     Request  : AnalysisInput  — wraps a list of Mention records plus the number
-               of latent dimensions (1 or 2) to fit.
+               of latent dimensions (1 or 2) to fit, and the number of
+               independent optimisation restarts to run.
     Response : AnalysisOutput — carries per-outlet and per-subject scores,
-               each expressed as a list of D floats (one per latent dimension).
+               each expressed as a list of D floats (one per latent dimension),
+               taken from whichever restart achieved the lowest loss.
 
 /generate
     Request  : GenerateInput  — known latent parameters (z, a, b) plus the
@@ -45,10 +47,14 @@ class AnalysisInput(BaseModel):
             counts will be summed when building the mention tensor.
         n_dimensions: Number of latent dimensions to fit (1 or 2).
             Defaults to 1 (equivalent to the original scalar model).
+        n_restarts: Number of independent optimisation restarts to run,
+            each from a different random initialisation. The restart with
+            the lowest loss is returned. Defaults to 1 (a single run).
     """
 
     data: List[Mention]
     n_dimensions: int = Field(1, ge=1, le=2)
+    n_restarts: int = Field(1, ge=1, le=50)
 
 
 class OutletScore(BaseModel):
@@ -91,14 +97,18 @@ class AnalysisOutput(BaseModel):
         outlets: One :class:`OutletScore` per unique outlet in the input.
         subjects: One :class:`SubjectScore` per unique subject in the input.
         loss: Final value of the minimised objective (negative penalised
-            log-likelihood).  Lower values indicate a better fit.
+            log-likelihood), from the best of the requested restarts.
+            Lower values indicate a better fit.
         bic: Bayesian Information Criteria. Final value of the minimised objective but penalizing the dimensionality of the model.  Lower values indicate a better fit.
+        n_restarts: Number of independent optimisation restarts that were run
+            to produce this result.
     """
 
     outlets: List[OutletScore]
     subjects: List[SubjectScore]
     loss: float
     bic: float
+    n_restarts: int = 1
 
 
 class GenerateInput(BaseModel):

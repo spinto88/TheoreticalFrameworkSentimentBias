@@ -86,7 +86,8 @@ def build_output(
     a: NDArray[np.float64],
     b: NDArray[np.float64],
     loss: float,
-    bic: float
+    bic: float,
+    n_restarts: int = 1,
 ) -> AnalysisOutput:
     """Assemble the API response object from estimated parameters.
 
@@ -98,7 +99,9 @@ def build_output(
         b: Estimated baseline sentiment parameters, shape ``(k,)`` — scalar per subject.
         loss: Final value of the minimised objective (``solution.fun`` from
             L-BFGS-B).  Lower values indicate a better fit.
-        bic: Bayesian Information Criteria. It penalizes the dimensionality of the model. Lower values indicate a better fit. 
+        bic: Bayesian Information Criteria. It penalizes the dimensionality of the model. Lower values indicate a better fit.
+        n_restarts: Number of independent optimisation restarts that were run
+            to produce this result.
 
     Returns:
         An :class:`~src.schemas.AnalysisOutput` instance ready for
@@ -112,7 +115,13 @@ def build_output(
         SubjectScore(subject=subjects[j], a=a[j].tolist(), b=float(b[j]))
         for j in range(len(subjects))
     ]
-    return AnalysisOutput(outlets=outlet_scores, subjects=subject_scores, loss=float(loss), bic=float(bic))
+    return AnalysisOutput(
+        outlets=outlet_scores,
+        subjects=subject_scores,
+        loss=float(loss),
+        bic=float(bic),
+        n_restarts=n_restarts,
+    )
 
 
 def log_likelihood(
@@ -248,22 +257,30 @@ def grad_negative_log_likelihood(
     return -np.concatenate([grad_z.ravel(), grad_a.ravel(), grad_b])
 
 
-def run_analysis(data: List[Mention], n_dims: int = 1) -> AnalysisOutput:
+def run_analysis(data: List[Mention], n_dims: int = 1, n_restarts: int = 1) -> AnalysisOutput:
     """Estimate latent bias parameters from a list of mention records.
 
     Builds the mention tensor, sets symmetric box constraints
     ``[-5, 5]`` on all parameters, and runs L-BFGS-B to minimise the
     negative penalised log-likelihood using an analytical gradient.
 
+    Because the objective is non-convex, the solver can settle into
+    different local minima depending on its random initialisation. When
+    ``n_restarts > 1``, the optimisation is run that many times from
+    independent random starting points and the restart with the lowest
+    loss (``solution.fun``) is kept.
+
     Args:
         data: List of :class:`~src.schemas.Mention` objects covering one
             or more outlet–subject–sentiment combinations.
         n_dims: Number of latent dimensions D to fit (default 1).
+        n_restarts: Number of independent optimisation restarts to run
+            (default 1). The restart achieving the lowest loss is returned.
 
     Returns:
         An :class:`~src.schemas.AnalysisOutput` with estimated *z*
         vectors (length D) and *a* vectors (length D) per outlet/subject,
-        and a scalar *b* per subject.
+        and a scalar *b* per subject, taken from the best restart.
     """
     mentions_matrix, outlets, subjects = build_tensor(data)
 
@@ -273,25 +290,31 @@ def run_analysis(data: List[Mention], n_dims: int = 1) -> AnalysisOutput:
     n_mentions: int = mentions_matrix.sum()
 
     bounds: Bounds = Bounds([-5] * n_params, [5] * n_params)
-    x0: NDArray[np.float64] = np.random.normal(size=n_params)
 
-    solution: OptimizeResult = minimize(
-        fun=negative_log_likelihood,
-        x0=x0,
-        args=(mentions_matrix, n_dims),
-        method="L-BFGS-B",
-        jac=grad_negative_log_likelihood,
-        bounds=bounds,
-        tol=1e-6,
-    )
+    best_solution: OptimizeResult | None = None
+    for _ in range(n_restarts):
+        x0: NDArray[np.float64] = np.random.normal(size=n_params)
 
-    z = solution.x[: m * n_dims].reshape(m, n_dims)
-    a = solution.x[m * n_dims : (m + k) * n_dims].reshape(k, n_dims)
-    b = solution.x[(m + k) * n_dims :]
+        solution: OptimizeResult = minimize(
+            fun=negative_log_likelihood,
+            x0=x0,
+            args=(mentions_matrix, n_dims),
+            method="L-BFGS-B",
+            jac=grad_negative_log_likelihood,
+            bounds=bounds,
+            tol=1e-6,
+        )
 
-    bic = aproximate_bayesian_information_criteria(solution.fun, n_params, n_mentions)
+        if best_solution is None or solution.fun < best_solution.fun:
+            best_solution = solution
 
-    return build_output(outlets, subjects, z, a, b, loss=solution.fun, bic=bic)
+    z = best_solution.x[: m * n_dims].reshape(m, n_dims)
+    a = best_solution.x[m * n_dims : (m + k) * n_dims].reshape(k, n_dims)
+    b = best_solution.x[(m + k) * n_dims :]
+
+    bic = aproximate_bayesian_information_criteria(best_solution.fun, n_params, n_mentions)
+
+    return build_output(outlets, subjects, z, a, b, loss=best_solution.fun, bic=bic, n_restarts=n_restarts)
 
 
 def generate_mentions(q: float, n: int) -> NDArray[np.int_]:
