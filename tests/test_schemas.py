@@ -125,9 +125,9 @@ class TestAnalysisInput:
         with pytest.raises(ValidationError):
             AnalysisInput(data=[], n_restarts=0)
 
-    def test_n_restarts_too_large_raises(self):
-        with pytest.raises(ValidationError):
-            AnalysisInput(data=[], n_restarts=51)
+    def test_n_restarts_arbitrarily_large_is_valid(self):
+        inp = AnalysisInput(data=[], n_restarts=500)
+        assert inp.n_restarts == 500
 
 
 # ---------------------------------------------------------------------------

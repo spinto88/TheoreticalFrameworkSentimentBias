@@ -118,7 +118,6 @@ async function sendData() {
   const restartsInput = document.getElementById("nRestartsInput");
   let nRestarts = parseInt(restartsInput.value, 10);
   if (!Number.isFinite(nRestarts) || nRestarts < 1) nRestarts = 1;
-  if (nRestarts > 50) nRestarts = 50;
   restartsInput.value = nRestarts;
   jsonData.n_restarts = nRestarts;
 

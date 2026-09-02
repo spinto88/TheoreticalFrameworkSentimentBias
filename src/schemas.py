@@ -49,12 +49,13 @@ class AnalysisInput(BaseModel):
             Defaults to 1 (equivalent to the original scalar model).
         n_restarts: Number of independent optimisation restarts to run,
             each from a different random initialisation. The restart with
-            the lowest loss is returned. Defaults to 1 (a single run).
+            the lowest loss is returned. Defaults to 1 (a single run); any
+            positive value is accepted.
     """
 
     data: List[Mention]
     n_dimensions: int = Field(1, ge=1, le=2)
-    n_restarts: int = Field(1, ge=1, le=50)
+    n_restarts: int = Field(1, ge=1)
 
 
 class OutletScore(BaseModel):

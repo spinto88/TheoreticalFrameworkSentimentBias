@@ -151,11 +151,6 @@ class TestAnalyzeValidation:
         response = client.post("/analyze", json=payload)
         assert response.status_code == 422
 
-    def test_n_restarts_too_large_returns_422(self):
-        payload = {**VALID_PAYLOAD, "n_restarts": 51}
-        response = client.post("/analyze", json=payload)
-        assert response.status_code == 422
-
     def test_wrong_content_type_returns_422(self):
         response = client.post("/analyze", content="not json",
                                headers={"Content-Type": "text/plain"})
