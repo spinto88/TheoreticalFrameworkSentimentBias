@@ -134,10 +134,10 @@ class TestAnalyzeRoute:
 
     @patch("src.app.run_analysis", return_value=MOCK_OUTPUT)
     def test_custom_fixed_a_forwarded_to_service(self, mock_fn):
-        payload = {**VALID_PAYLOAD, "fixed_a": [0.5]}
+        payload = {**VALID_PAYLOAD, "fixed_a": {"X": [1.0], "Y": [-1.0]}}
         client.post("/analyze", json=payload)
         _, call_kwargs = mock_fn.call_args
-        assert call_kwargs["fixed_a"] == [0.5]
+        assert call_kwargs["fixed_a"] == {"X": [1.0], "Y": [-1.0]}
 
 
 # ---------------------------------------------------------------------------

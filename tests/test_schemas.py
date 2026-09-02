@@ -142,20 +142,41 @@ class TestAnalysisInput:
         assert inp.fixed_a is None
 
     def test_fixed_a_matching_n_dimensions_1d_is_valid(self):
-        inp = AnalysisInput(data=[], n_dimensions=1, fixed_a=[0.5])
-        assert inp.fixed_a == [0.5]
+        mentions = [Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=1)]
+        inp = AnalysisInput(data=mentions, n_dimensions=1, fixed_a={"X": [0.5]})
+        assert inp.fixed_a == {"X": [0.5]}
 
     def test_fixed_a_matching_n_dimensions_2d_is_valid(self):
-        inp = AnalysisInput(data=[], n_dimensions=2, fixed_a=[0.5, -1.2])
-        assert inp.fixed_a == [0.5, -1.2]
+        mentions = [Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=1)]
+        inp = AnalysisInput(data=mentions, n_dimensions=2, fixed_a={"X": [0.5, -1.2]})
+        assert inp.fixed_a == {"X": [0.5, -1.2]}
+
+    def test_fixed_a_multiple_subjects_is_valid(self):
+        mentions = [
+            Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=1),
+            Mention(outlet="A", subject="Y", mention_type="positive", amount_of_mentions=1),
+        ]
+        inp = AnalysisInput(data=mentions, fixed_a={"X": [1.0], "Y": [-1.0]})
+        assert inp.fixed_a == {"X": [1.0], "Y": [-1.0]}
 
     def test_fixed_a_wrong_length_raises(self):
+        mentions = [Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=1)]
         with pytest.raises(ValidationError):
-            AnalysisInput(data=[], n_dimensions=1, fixed_a=[0.5, 1.0])
+            AnalysisInput(data=mentions, n_dimensions=1, fixed_a={"X": [0.5, 1.0]})
 
     def test_fixed_a_wrong_length_for_default_dimensions_raises(self):
+        mentions = [Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=1)]
         with pytest.raises(ValidationError):
-            AnalysisInput(data=[], fixed_a=[])
+            AnalysisInput(data=mentions, fixed_a={"X": []})
+
+    def test_fixed_a_unknown_subject_raises(self):
+        mentions = [Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=1)]
+        with pytest.raises(ValidationError):
+            AnalysisInput(data=mentions, fixed_a={"NotASubject": [1.0]})
+
+    def test_fixed_a_empty_dict_is_valid(self):
+        inp = AnalysisInput(data=[], fixed_a={})
+        assert inp.fixed_a == {}
 
 
 # ---------------------------------------------------------------------------

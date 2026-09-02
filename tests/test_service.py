@@ -489,23 +489,36 @@ class TestRunAnalysis:
         assert mentions_matrix[..., 1].sum() == 100
 
     @patch("src.service.minimize")
-    def test_fixed_a_pins_bounds_for_all_subjects(self, mock_min):
-        """fixed_a collapses the a-slice of the bounds to [value, value]."""
+    def test_fixed_a_pins_bounds_per_subject(self, mock_min):
+        """fixed_a collapses the a-slice of only the named subjects' bounds."""
         data = [
             make_mention("A", "X", "positive", 5),
             make_mention("A", "Y", "negative", 3),
         ]
-        # m=1, k=2, n_dims=1 -> a occupies indices [1, 2]
+        # m=1, k=2, subjects sorted -> X at index 0, Y at index 1
+        # x = [z0, aX, aY, bX, bY] -> aX at index 1, aY at index 2
         mock_min.return_value = self._mock_solution(1, 2)
-        run_analysis(data, fixed_a=[0.7])
+        run_analysis(data, fixed_a={"X": [1.0], "Y": [-1.0]})
         bounds = mock_min.call_args.kwargs["bounds"]
-        assert bounds.lb[1] == pytest.approx(0.7)
-        assert bounds.ub[1] == pytest.approx(0.7)
-        assert bounds.lb[2] == pytest.approx(0.7)
-        assert bounds.ub[2] == pytest.approx(0.7)
-        # z (index 0) and b (index 3) remain free at [-5, 5]
+        assert bounds.lb[1] == bounds.ub[1] == pytest.approx(1.0)
+        assert bounds.lb[2] == bounds.ub[2] == pytest.approx(-1.0)
+        # z (index 0) and b (indices 3, 4) remain free at [-5, 5]
         assert bounds.lb[0] == -5 and bounds.ub[0] == 5
         assert bounds.lb[3] == -5 and bounds.ub[3] == 5
+        assert bounds.lb[4] == -5 and bounds.ub[4] == 5
+
+    @patch("src.service.minimize")
+    def test_fixed_a_only_pins_named_subject(self, mock_min):
+        """Subjects absent from fixed_a keep the default [-5, 5] bounds."""
+        data = [
+            make_mention("A", "X", "positive", 5),
+            make_mention("A", "Y", "negative", 3),
+        ]
+        mock_min.return_value = self._mock_solution(1, 2)
+        run_analysis(data, fixed_a={"X": [1.0]})
+        bounds = mock_min.call_args.kwargs["bounds"]
+        assert bounds.lb[1] == bounds.ub[1] == pytest.approx(1.0)
+        assert bounds.lb[2] == -5 and bounds.ub[2] == 5
 
     @patch("src.service.minimize")
     def test_fixed_a_none_leaves_bounds_unrestricted(self, mock_min):
@@ -516,10 +529,18 @@ class TestRunAnalysis:
         assert all(ub == 5 for ub in bounds.ub)
 
     @patch("src.service.minimize")
+    def test_fixed_a_empty_dict_leaves_bounds_unrestricted(self, mock_min):
+        mock_min.return_value = self._mock_solution(1, 1)
+        run_analysis([make_mention("A", "X", "positive", 1)], fixed_a={})
+        bounds = mock_min.call_args.kwargs["bounds"]
+        assert all(lb == -5 for lb in bounds.lb)
+        assert all(ub == 5 for ub in bounds.ub)
+
+    @patch("src.service.minimize")
     def test_fixed_a_two_dimensions_pins_both_components(self, mock_min):
         data = [make_mention("A", "X", "positive", 1)]
         mock_min.return_value = self._mock_solution(1, 1, n_dims=2)
-        run_analysis(data, n_dims=2, fixed_a=[1.0, -2.0])
+        run_analysis(data, n_dims=2, fixed_a={"X": [1.0, -2.0]})
         bounds = mock_min.call_args.kwargs["bounds"]
         # x = [z0, z1, a0, a1, b] -> a occupies indices [2, 3]
         assert bounds.lb[2] == bounds.ub[2] == pytest.approx(1.0)
@@ -528,7 +549,7 @@ class TestRunAnalysis:
     @patch("src.service.minimize")
     def test_fixed_a_initial_guess_respects_pinned_bounds(self, mock_min):
         mock_min.return_value = self._mock_solution(1, 1)
-        run_analysis([make_mention("A", "X", "positive", 1)], fixed_a=[3.0])
+        run_analysis([make_mention("A", "X", "positive", 1)], fixed_a={"X": [3.0]})
         x0 = mock_min.call_args.kwargs["x0"]
         assert x0[1] == pytest.approx(3.0)
 

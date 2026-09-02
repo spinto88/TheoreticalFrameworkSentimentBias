@@ -268,7 +268,7 @@ def run_analysis(
     n_dims: int = 1,
     n_restarts: int = 1,
     ignore_neutral: bool = False,
-    fixed_a: List[float] | None = None,
+    fixed_a: dict[str, List[float]] | None = None,
 ) -> AnalysisOutput:
     """Estimate latent bias parameters from a list of mention records.
 
@@ -290,11 +290,12 @@ def run_analysis(
             (default 1). The restart achieving the lowest loss is returned.
         ignore_neutral: If True, neutral mention counts are treated as 0
             before fitting (default False).
-        fixed_a: If provided (length ``n_dims``), the discrimination vector
-            ``a`` is pinned to this value for every subject instead of
-            being estimated — implemented by collapsing its box bounds to
-            a single point, so L-BFGS-B never moves it. Defaults to None
-            (``a`` is estimated normally).
+        fixed_a: If provided, maps a subject name to a discrimination
+            vector (length ``n_dims``) that subject's ``a`` is pinned to
+            instead of being estimated — implemented by collapsing its box
+            bounds to a single point, so L-BFGS-B never moves it. Subjects
+            absent from the mapping (or all subjects, if None) are
+            estimated normally.
 
     Returns:
         An :class:`~src.schemas.AnalysisOutput` with estimated *z*
@@ -311,18 +312,20 @@ def run_analysis(
     lower: List[float] = [-5] * n_params
     upper: List[float] = [5] * n_params
 
-    if fixed_a is not None:
-        for j in range(k):
+    if fixed_a:
+        for j, subject in enumerate(subjects):
+            if subject not in fixed_a:
+                continue
             for d in range(n_dims):
                 idx = m * n_dims + j * n_dims + d
-                lower[idx] = upper[idx] = fixed_a[d]
+                lower[idx] = upper[idx] = fixed_a[subject][d]
 
     bounds: Bounds = Bounds(lower, upper)
 
     best_solution: OptimizeResult | None = None
     for _ in range(n_restarts):
         x0: NDArray[np.float64] = np.random.normal(size=n_params)
-        if fixed_a is not None:
+        if fixed_a:
             x0 = np.clip(x0, lower, upper)
 
         solution: OptimizeResult = minimize(

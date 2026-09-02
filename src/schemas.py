@@ -16,7 +16,7 @@ Pydantic schemas for the /analyze and /generate endpoints.
                generative model.
 """
 
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -54,25 +54,39 @@ class AnalysisInput(BaseModel):
         ignore_neutral: If True, neutral mention counts are treated as 0
             (excluded from the fit entirely) before the model is run.
             Defaults to False.
-        fixed_a: If provided, the discrimination vector ``a`` is held at
-            this fixed value (length D) for every subject instead of being
-            estimated. Must have exactly ``n_dimensions`` entries. Defaults
-            to None (``a`` is estimated normally).
+        fixed_a: If provided, maps a subject name to a discrimination
+            vector (length D) that subject's ``a`` is held at instead of
+            being estimated. Subjects absent from this mapping are still
+            estimated normally. Every key must match a subject present in
+            ``data``, and every value must have exactly ``n_dimensions``
+            entries. Defaults to None (``a`` is estimated for every
+            subject).
     """
 
     data: List[Mention]
     n_dimensions: int = Field(1, ge=1, le=2)
     n_restarts: int = Field(1, ge=1)
     ignore_neutral: bool = False
-    fixed_a: Optional[List[float]] = None
+    fixed_a: Optional[Dict[str, List[float]]] = None
 
     @model_validator(mode="after")
-    def _check_fixed_a_length(self) -> "AnalysisInput":
-        if self.fixed_a is not None and len(self.fixed_a) != self.n_dimensions:
-            raise ValueError(
-                f"fixed_a must have exactly {self.n_dimensions} entries "
-                f"(one per latent dimension), got {len(self.fixed_a)}."
-            )
+    def _check_fixed_a(self) -> "AnalysisInput":
+        if self.fixed_a is None:
+            return self
+
+        known_subjects = {m.subject for m in self.data}
+        for subject, vector in self.fixed_a.items():
+            if subject not in known_subjects:
+                raise ValueError(
+                    f"fixed_a references subject {subject!r}, which is not "
+                    f"present in data."
+                )
+            if len(vector) != self.n_dimensions:
+                raise ValueError(
+                    f"fixed_a[{subject!r}] must have exactly "
+                    f"{self.n_dimensions} entries (one per latent "
+                    f"dimension), got {len(vector)}."
+                )
         return self
 
 

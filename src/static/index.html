@@ -393,14 +393,18 @@
         <button class="btn btn-primary" id="runBtn" onclick="sendData()" disabled>Run Analysis</button>
       </div>
 
-      <div class="input-row" style="justify-content:flex-start;margin-top:12px;">
-        <label style="display:flex;align-items:center;gap:8px;font-size:0.875rem;color:var(--muted);cursor:pointer;">
+      <div class="input-row" style="justify-content:flex-start;align-items:flex-start;margin-top:12px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.875rem;color:var(--muted);cursor:pointer;padding-top:6px;">
           <input type="checkbox" id="fixedAEnabledCheckbox" style="cursor:pointer;" onchange="document.getElementById('fixedAInput').disabled = !this.checked;">
-          Fix subject discrimination (a) to
+          Fix subject discrimination (a) per subject
         </label>
-        <input type="text" id="fixedAInput" placeholder="e.g. 1 or 1,0.5" disabled
-          style="width:140px;margin-left:8px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:0.875rem;">
-        <span style="margin-left:8px;font-size:0.78rem;color:var(--muted);">comma-separated, one value per latent dimension</span>
+        <div style="margin-left:8px;">
+          <textarea id="fixedAInput" rows="3" disabled placeholder="One subject per line, e.g.&#10;SubjectA: 1&#10;SubjectB: -1"
+            style="width:260px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:0.82rem;font-family:'JetBrains Mono',monospace;resize:vertical;"></textarea>
+          <div style="margin-top:4px;font-size:0.78rem;color:var(--muted);">
+            format: <code>subject: value</code> (or <code>value1,value2</code> for 2 dimensions), one per line — subjects not listed are estimated normally
+          </div>
+        </div>
       </div>
 
       <div id="progressSection">

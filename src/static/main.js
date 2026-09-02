@@ -124,17 +124,35 @@ async function sendData() {
   jsonData.ignore_neutral = document.getElementById("ignoreNeutralCheckbox").checked;
 
   if (document.getElementById("fixedAEnabledCheckbox").checked) {
-    const rawValues = document.getElementById("fixedAInput").value
-      .split(",")
-      .map(v => v.trim())
-      .filter(v => v.length > 0)
-      .map(Number);
+    const knownSubjects = new Set(jsonData.data.map(r => r.subject));
+    const fixedA = {};
 
-    if (rawValues.length !== nDims || rawValues.some(Number.isNaN)) {
-      showError(`"Fix a" must have exactly ${nDims} comma-separated number(s) to match the latent dimensions.`);
-      return;
+    const lines = document.getElementById("fixedAInput").value
+      .split("\n")
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+
+    for (const line of lines) {
+      const sepIdx = line.indexOf(":");
+      if (sepIdx === -1) {
+        showError(`"Fix a" line "${line}" is missing a ":" — expected format "subject: value[,value2]".`);
+        return;
+      }
+      const subject = line.slice(0, sepIdx).trim();
+      const values  = line.slice(sepIdx + 1).split(",").map(v => Number(v.trim()));
+
+      if (!knownSubjects.has(subject)) {
+        showError(`"Fix a" references unknown subject "${subject}".`);
+        return;
+      }
+      if (values.length !== nDims || values.some(Number.isNaN)) {
+        showError(`"Fix a" for subject "${subject}" must have exactly ${nDims} comma-separated number(s).`);
+        return;
+      }
+      fixedA[subject] = values;
     }
-    jsonData.fixed_a = rawValues;
+
+    jsonData.fixed_a = fixedA;
   }
 
   runBtn.disabled    = true;
