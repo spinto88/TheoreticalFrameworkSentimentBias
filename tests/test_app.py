@@ -113,6 +113,19 @@ class TestAnalyzeRoute:
         _, call_kwargs = mock_fn.call_args
         assert call_kwargs["n_restarts"] == 10
 
+    @patch("src.app.run_analysis", return_value=MOCK_OUTPUT)
+    def test_default_ignore_neutral_forwarded_to_service(self, mock_fn):
+        client.post("/analyze", json=VALID_PAYLOAD)
+        _, call_kwargs = mock_fn.call_args
+        assert call_kwargs["ignore_neutral"] is False
+
+    @patch("src.app.run_analysis", return_value=MOCK_OUTPUT)
+    def test_custom_ignore_neutral_forwarded_to_service(self, mock_fn):
+        payload = {**VALID_PAYLOAD, "ignore_neutral": True}
+        client.post("/analyze", json=payload)
+        _, call_kwargs = mock_fn.call_args
+        assert call_kwargs["ignore_neutral"] is True
+
 
 # ---------------------------------------------------------------------------
 # POST /analyze — validation errors

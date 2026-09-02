@@ -129,6 +129,14 @@ class TestAnalysisInput:
         inp = AnalysisInput(data=[], n_restarts=500)
         assert inp.n_restarts == 500
 
+    def test_default_ignore_neutral_is_false(self):
+        inp = AnalysisInput(data=[])
+        assert inp.ignore_neutral is False
+
+    def test_ignore_neutral_true_is_valid(self):
+        inp = AnalysisInput(data=[], ignore_neutral=True)
+        assert inp.ignore_neutral is True
+
 
 # ---------------------------------------------------------------------------
 # OutletScore

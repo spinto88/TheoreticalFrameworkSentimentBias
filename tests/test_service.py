@@ -132,6 +132,27 @@ class TestBuildTensor:
         assert outlets == ["Solo"]
         assert subjects == ["Topic"]
 
+    def test_ignore_neutral_false_keeps_neutral_counts(self):
+        matrix, _, _ = build_tensor(SIMPLE_DATA, ignore_neutral=False)
+        assert matrix[..., 1].sum() == 6
+
+    def test_ignore_neutral_true_zeroes_neutral_counts(self):
+        matrix, outlets, subjects = build_tensor(SIMPLE_DATA, ignore_neutral=True)
+        assert matrix[..., 1].sum() == 0
+        # non-neutral counts and index ordering are unaffected
+        assert outlets == ["A", "B"]
+        assert subjects == ["X", "Y"]
+        a_idx, x_idx = outlets.index("A"), subjects.index("X")
+        assert matrix[a_idx, x_idx, 2] == 10
+        assert matrix[a_idx, x_idx, 0] == 3
+
+    def test_ignore_neutral_true_still_registers_outlet_subject_pair(self):
+        data = [make_mention("A", "X", "neutral", 5)]
+        matrix, outlets, subjects = build_tensor(data, ignore_neutral=True)
+        assert outlets == ["A"]
+        assert subjects == ["X"]
+        assert matrix.sum() == 0
+
 
 # ---------------------------------------------------------------------------
 # aproximate_bayesian_information_criteria
@@ -446,6 +467,26 @@ class TestRunAnalysis:
         mock_min.return_value = self._mock_solution(1, 1)
         run_analysis([make_mention("A", "X", "positive", 1)])
         mock_min.assert_called_once()
+
+    @patch("src.service.minimize")
+    def test_ignore_neutral_excludes_neutral_counts_from_mentions_matrix(self, mock_min):
+        data = [
+            make_mention("A", "X", "positive", 5),
+            make_mention("A", "X", "neutral", 100),
+        ]
+        mock_min.return_value = self._mock_solution(1, 1)
+        run_analysis(data, ignore_neutral=True)
+        mentions_matrix = mock_min.call_args.kwargs["args"][0]
+        assert mentions_matrix[..., 1].sum() == 0
+        assert mentions_matrix[..., 2].sum() == 5
+
+    @patch("src.service.minimize")
+    def test_ignore_neutral_default_keeps_neutral_counts(self, mock_min):
+        data = [make_mention("A", "X", "neutral", 100)]
+        mock_min.return_value = self._mock_solution(1, 1)
+        run_analysis(data)
+        mentions_matrix = mock_min.call_args.kwargs["args"][0]
+        assert mentions_matrix[..., 1].sum() == 100
 
     @patch("src.service.minimize")
     def test_returns_analysis_output(self, mock_min):

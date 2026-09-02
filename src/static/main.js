@@ -121,6 +121,8 @@ async function sendData() {
   restartsInput.value = nRestarts;
   jsonData.n_restarts = nRestarts;
 
+  jsonData.ignore_neutral = document.getElementById("ignoreNeutralCheckbox").checked;
+
   runBtn.disabled    = true;
   runBtn.textContent = "Running…";
   startProgress(estimateSeconds(jsonData.data, nDims, nRestarts));

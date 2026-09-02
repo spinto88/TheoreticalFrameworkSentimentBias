@@ -51,11 +51,15 @@ class AnalysisInput(BaseModel):
             each from a different random initialisation. The restart with
             the lowest loss is returned. Defaults to 1 (a single run); any
             positive value is accepted.
+        ignore_neutral: If True, neutral mention counts are treated as 0
+            (excluded from the fit entirely) before the model is run.
+            Defaults to False.
     """
 
     data: List[Mention]
     n_dimensions: int = Field(1, ge=1, le=2)
     n_restarts: int = Field(1, ge=1)
+    ignore_neutral: bool = False
 
 
 class OutletScore(BaseModel):

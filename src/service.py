@@ -41,6 +41,7 @@ from src.schemas import AnalysisOutput, Mention, OutletScore, SubjectScore, Anal
 
 def build_tensor(
     data: List[Mention],
+    ignore_neutral: bool = False,
 ) -> tuple[NDArray[np.int_], List[str], List[str]]:
     """Build a 3-D mention tensor from a flat list of Mention records.
 
@@ -50,6 +51,9 @@ def build_tensor(
 
     Args:
         data: List of :class:`~src.schemas.Mention` objects.
+        ignore_neutral: If True, neutral mention counts are treated as 0
+            (the neutral slice of the returned tensor is all zeros)
+            regardless of what was reported in ``data``.
 
     Returns:
         A tuple ``(matrix, outlets, subjects)`` where:
@@ -71,6 +75,8 @@ def build_tensor(
     type_to_idx: dict[str, int] = {"negative": 0, "neutral": 1, "positive": 2}
 
     for d in data:
+        if ignore_neutral and d.mention_type == "neutral":
+            continue
         i = outlet_to_idx[d.outlet]
         j = subject_to_idx[d.subject]
         t = type_to_idx[d.mention_type]
@@ -257,7 +263,12 @@ def grad_negative_log_likelihood(
     return -np.concatenate([grad_z.ravel(), grad_a.ravel(), grad_b])
 
 
-def run_analysis(data: List[Mention], n_dims: int = 1, n_restarts: int = 1) -> AnalysisOutput:
+def run_analysis(
+    data: List[Mention],
+    n_dims: int = 1,
+    n_restarts: int = 1,
+    ignore_neutral: bool = False,
+) -> AnalysisOutput:
     """Estimate latent bias parameters from a list of mention records.
 
     Builds the mention tensor, sets symmetric box constraints
@@ -276,13 +287,15 @@ def run_analysis(data: List[Mention], n_dims: int = 1, n_restarts: int = 1) -> A
         n_dims: Number of latent dimensions D to fit (default 1).
         n_restarts: Number of independent optimisation restarts to run
             (default 1). The restart achieving the lowest loss is returned.
+        ignore_neutral: If True, neutral mention counts are treated as 0
+            before fitting (default False).
 
     Returns:
         An :class:`~src.schemas.AnalysisOutput` with estimated *z*
         vectors (length D) and *a* vectors (length D) per outlet/subject,
         and a scalar *b* per subject, taken from the best restart.
     """
-    mentions_matrix, outlets, subjects = build_tensor(data)
+    mentions_matrix, outlets, subjects = build_tensor(data, ignore_neutral=ignore_neutral)
 
     m: int = len(outlets)
     k: int = len(subjects)
