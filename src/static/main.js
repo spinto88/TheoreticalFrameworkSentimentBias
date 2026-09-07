@@ -1,6 +1,9 @@
-const fileInput = document.getElementById("fileInput");
-const dropZone  = document.getElementById("dropZone");
-const runBtn    = document.getElementById("runBtn");
+const fileInput          = document.getElementById("fileInput");
+const dropZone           = document.getElementById("dropZone");
+const runBtn             = document.getElementById("runBtn");
+const nDimensionsSelect  = document.getElementById("nDimensionsSelect");
+const signReferenceGroup = document.getElementById("signReferenceGroup");
+const signOutletSelect   = document.getElementById("signOutletSelect");
 
 // ── File selection ──────────────────────────────────────────────
 fileInput.addEventListener("change", () => {
@@ -14,7 +17,31 @@ function setFile(file) {
   dropZone.classList.add("has-file");
   runBtn.disabled = false;
   clearError();
+  populateSignOutletOptions(file);
 }
+
+async function populateSignOutletOptions(file) {
+  while (signOutletSelect.options.length > 1) signOutletSelect.remove(1);
+  try {
+    const isCSV = file.name.toLowerCase().endsWith(".csv");
+    const text  = await file.text();
+    const data  = (isCSV ? parseCSV(text) : JSON.parse(text)).data;
+    const outlets = [...new Set(data.map(r => r.outlet))].sort();
+    for (const outlet of outlets) {
+      const option = document.createElement("option");
+      option.value = outlet;
+      option.textContent = outlet;
+      signOutletSelect.appendChild(option);
+    }
+  } catch (e) {
+    // Leave the dropdown at "Auto" — the real parse error surfaces on Run.
+  }
+}
+
+// ── Latent dimensions ───────────────────────────────────────────
+nDimensionsSelect.addEventListener("change", () => {
+  signReferenceGroup.hidden = nDimensionsSelect.value !== "1";
+});
 
 // ── Drag & drop ─────────────────────────────────────────────────
 dropZone.addEventListener("dragover", e => {
@@ -121,38 +148,9 @@ async function sendData() {
   restartsInput.value = nRestarts;
   jsonData.n_restarts = nRestarts;
 
-  jsonData.ignore_neutral = document.getElementById("ignoreNeutralCheckbox").checked;
-
-  if (document.getElementById("fixedAEnabledCheckbox").checked) {
-    const knownSubjects = new Set(jsonData.data.map(r => r.subject));
-    const fixedA = {};
-
-    const lines = document.getElementById("fixedAInput").value
-      .split("\n")
-      .map(l => l.trim())
-      .filter(l => l.length > 0);
-
-    for (const line of lines) {
-      const sepIdx = line.indexOf(":");
-      if (sepIdx === -1) {
-        showError(`"Fix a" line "${line}" is missing a ":" — expected format "subject: value[,value2]".`);
-        return;
-      }
-      const subject = line.slice(0, sepIdx).trim();
-      const values  = line.slice(sepIdx + 1).split(",").map(v => Number(v.trim()));
-
-      if (!knownSubjects.has(subject)) {
-        showError(`"Fix a" references unknown subject "${subject}".`);
-        return;
-      }
-      if (values.length !== nDims || values.some(Number.isNaN)) {
-        showError(`"Fix a" for subject "${subject}" must have exactly ${nDims} comma-separated number(s).`);
-        return;
-      }
-      fixedA[subject] = values;
-    }
-
-    jsonData.fixed_a = fixedA;
+  if (nDims === 1 && signOutletSelect.value) {
+    jsonData.sign_reference_outlet = signOutletSelect.value;
+    jsonData.sign_reference_positive = document.getElementById("signPositiveSelect").value === "positive";
   }
 
   runBtn.disabled    = true;

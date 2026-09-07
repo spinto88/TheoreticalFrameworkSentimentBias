@@ -129,54 +129,33 @@ class TestAnalysisInput:
         inp = AnalysisInput(data=[], n_restarts=500)
         assert inp.n_restarts == 500
 
-    def test_default_ignore_neutral_is_false(self):
+    def test_default_sign_reference_outlet_is_none(self):
         inp = AnalysisInput(data=[])
-        assert inp.ignore_neutral is False
+        assert inp.sign_reference_outlet is None
 
-    def test_ignore_neutral_true_is_valid(self):
-        inp = AnalysisInput(data=[], ignore_neutral=True)
-        assert inp.ignore_neutral is True
-
-    def test_default_fixed_a_is_none(self):
+    def test_default_sign_reference_positive_is_true(self):
         inp = AnalysisInput(data=[])
-        assert inp.fixed_a is None
+        assert inp.sign_reference_positive is True
 
-    def test_fixed_a_matching_n_dimensions_1d_is_valid(self):
+    def test_sign_reference_outlet_matching_data_is_valid(self):
         mentions = [Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=1)]
-        inp = AnalysisInput(data=mentions, n_dimensions=1, fixed_a={"X": [0.5]})
-        assert inp.fixed_a == {"X": [0.5]}
+        inp = AnalysisInput(data=mentions, n_dimensions=1, sign_reference_outlet="A")
+        assert inp.sign_reference_outlet == "A"
 
-    def test_fixed_a_matching_n_dimensions_2d_is_valid(self):
+    def test_sign_reference_positive_false_is_valid(self):
         mentions = [Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=1)]
-        inp = AnalysisInput(data=mentions, n_dimensions=2, fixed_a={"X": [0.5, -1.2]})
-        assert inp.fixed_a == {"X": [0.5, -1.2]}
+        inp = AnalysisInput(data=mentions, sign_reference_outlet="A", sign_reference_positive=False)
+        assert inp.sign_reference_positive is False
 
-    def test_fixed_a_multiple_subjects_is_valid(self):
-        mentions = [
-            Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=1),
-            Mention(outlet="A", subject="Y", mention_type="positive", amount_of_mentions=1),
-        ]
-        inp = AnalysisInput(data=mentions, fixed_a={"X": [1.0], "Y": [-1.0]})
-        assert inp.fixed_a == {"X": [1.0], "Y": [-1.0]}
-
-    def test_fixed_a_wrong_length_raises(self):
+    def test_sign_reference_outlet_unknown_raises(self):
         mentions = [Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=1)]
         with pytest.raises(ValidationError):
-            AnalysisInput(data=mentions, n_dimensions=1, fixed_a={"X": [0.5, 1.0]})
+            AnalysisInput(data=mentions, sign_reference_outlet="NotAnOutlet")
 
-    def test_fixed_a_wrong_length_for_default_dimensions_raises(self):
+    def test_sign_reference_outlet_with_two_dimensions_raises(self):
         mentions = [Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=1)]
         with pytest.raises(ValidationError):
-            AnalysisInput(data=mentions, fixed_a={"X": []})
-
-    def test_fixed_a_unknown_subject_raises(self):
-        mentions = [Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=1)]
-        with pytest.raises(ValidationError):
-            AnalysisInput(data=mentions, fixed_a={"NotASubject": [1.0]})
-
-    def test_fixed_a_empty_dict_is_valid(self):
-        inp = AnalysisInput(data=[], fixed_a={})
-        assert inp.fixed_a == {}
+            AnalysisInput(data=mentions, n_dimensions=2, sign_reference_outlet="A")
 
 
 # ---------------------------------------------------------------------------

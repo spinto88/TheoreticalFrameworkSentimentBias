@@ -41,7 +41,6 @@ from src.schemas import AnalysisOutput, Mention, OutletScore, SubjectScore, Anal
 
 def build_tensor(
     data: List[Mention],
-    ignore_neutral: bool = False,
 ) -> tuple[NDArray[np.int_], List[str], List[str]]:
     """Build a 3-D mention tensor from a flat list of Mention records.
 
@@ -51,9 +50,6 @@ def build_tensor(
 
     Args:
         data: List of :class:`~src.schemas.Mention` objects.
-        ignore_neutral: If True, neutral mention counts are treated as 0
-            (the neutral slice of the returned tensor is all zeros)
-            regardless of what was reported in ``data``.
 
     Returns:
         A tuple ``(matrix, outlets, subjects)`` where:
@@ -75,8 +71,6 @@ def build_tensor(
     type_to_idx: dict[str, int] = {"negative": 0, "neutral": 1, "positive": 2}
 
     for d in data:
-        if ignore_neutral and d.mention_type == "neutral":
-            continue
         i = outlet_to_idx[d.outlet]
         j = subject_to_idx[d.subject]
         t = type_to_idx[d.mention_type]
@@ -128,6 +122,56 @@ def build_output(
         bic=float(bic),
         n_restarts=n_restarts,
     )
+
+
+def canonicalize_1d(
+    z: NDArray[np.float64],
+    a: NDArray[np.float64],
+    b: NDArray[np.float64],
+    sign_reference_idx: int = 0,
+    sign_reference_positive: bool = True,
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+    """Standardize 1-D outlet bias to zero mean / unit variance.
+
+    The likelihood is invariant under ``z -> (z - c) / s``,
+    ``a -> a * s``, ``b -> b + c * a`` for any ``c``/``s``, so the raw
+    optimizer output has no fixed scale or sign. This picks the
+    representative with ``z`` at zero mean / unit variance (absorbing
+    the rescaling into ``a`` and the mean shift into ``b`` so that
+    ``q_ij = dot(z, a) + b`` is unchanged), then flips the sign of
+    ``z`` and ``a`` if needed so that ``z[sign_reference_idx]`` has the
+    requested sign.
+
+    Args:
+        z: Estimated bias scores, shape ``(m, 1)``.
+        a: Estimated discrimination parameters, shape ``(k, 1)``.
+        b: Estimated baseline sentiment parameters, shape ``(k,)``.
+        sign_reference_idx: Index of the outlet whose sign after
+            standardization determines the overall sign convention.
+        sign_reference_positive: If True, the reference outlet's ``z``
+            is made positive; if False, negative.
+
+    Returns:
+        The canonicalized ``(z, a, b)``, with ``z`` and ``a`` still
+        shaped ``(m, 1)`` / ``(k, 1)``.
+    """
+    z_flat = z[:, 0]
+    a_flat = a[:, 0]
+
+    z_mean, z_std = z_flat.mean(), z_flat.std()
+    if z_std == 0:
+        return z, a, b  # degenerate: all outlets identical (or a single outlet)
+
+    z_new = (z_flat - z_mean) / z_std
+    a_new = a_flat * z_std
+    b_new = b + z_mean * a_flat
+
+    ref = z_new[sign_reference_idx]
+    flip = (sign_reference_positive and ref < 0) or (not sign_reference_positive and ref > 0)
+    if flip:
+        z_new, a_new = -z_new, -a_new
+
+    return z_new.reshape(-1, 1), a_new.reshape(-1, 1), b_new
 
 
 def log_likelihood(
@@ -267,8 +311,8 @@ def run_analysis(
     data: List[Mention],
     n_dims: int = 1,
     n_restarts: int = 1,
-    ignore_neutral: bool = False,
-    fixed_a: dict[str, List[float]] | None = None,
+    sign_reference_outlet: str | None = None,
+    sign_reference_positive: bool = True,
 ) -> AnalysisOutput:
     """Estimate latent bias parameters from a list of mention records.
 
@@ -282,51 +326,41 @@ def run_analysis(
     independent random starting points and the restart with the lowest
     loss (``solution.fun``) is kept.
 
+    When ``n_dims == 1``, the fitted ``z``/``a``/``b`` are canonicalized
+    (see :func:`canonicalize_1d`) since the 1-D model is only identified
+    up to an affine reparametrization of ``z``.
+
     Args:
         data: List of :class:`~src.schemas.Mention` objects covering one
             or more outlet–subject–sentiment combinations.
         n_dims: Number of latent dimensions D to fit (default 1).
         n_restarts: Number of independent optimisation restarts to run
             (default 1). The restart achieving the lowest loss is returned.
-        ignore_neutral: If True, neutral mention counts are treated as 0
-            before fitting (default False).
-        fixed_a: If provided, maps a subject name to a discrimination
-            vector (length ``n_dims``) that subject's ``a`` is pinned to
-            instead of being estimated — implemented by collapsing its box
-            bounds to a single point, so L-BFGS-B never moves it. Subjects
-            absent from the mapping (or all subjects, if None) are
-            estimated normally.
+        sign_reference_outlet: When ``n_dims == 1``, the name of the
+            outlet whose canonicalized ``z`` sign is controlled by
+            ``sign_reference_positive``. Defaults to the first outlet
+            (alphabetically) when None.
+        sign_reference_positive: When ``n_dims == 1``, whether the
+            reference outlet's canonicalized ``z`` should be positive
+            (default) or negative.
 
     Returns:
         An :class:`~src.schemas.AnalysisOutput` with estimated *z*
         vectors (length D) and *a* vectors (length D) per outlet/subject,
         and a scalar *b* per subject, taken from the best restart.
     """
-    mentions_matrix, outlets, subjects = build_tensor(data, ignore_neutral=ignore_neutral)
+    mentions_matrix, outlets, subjects = build_tensor(data)
 
     m: int = len(outlets)
     k: int = len(subjects)
     n_params: int = (m + k) * n_dims + k
     n_mentions: int = mentions_matrix.sum()
 
-    lower: List[float] = [-5] * n_params
-    upper: List[float] = [5] * n_params
-
-    if fixed_a:
-        for j, subject in enumerate(subjects):
-            if subject not in fixed_a:
-                continue
-            for d in range(n_dims):
-                idx = m * n_dims + j * n_dims + d
-                lower[idx] = upper[idx] = fixed_a[subject][d]
-
-    bounds: Bounds = Bounds(lower, upper)
+    bounds: Bounds = Bounds([-5] * n_params, [5] * n_params)
 
     best_solution: OptimizeResult | None = None
     for _ in range(n_restarts):
         x0: NDArray[np.float64] = np.random.normal(size=n_params)
-        if fixed_a:
-            x0 = np.clip(x0, lower, upper)
 
         solution: OptimizeResult = minimize(
             fun=negative_log_likelihood,
@@ -344,6 +378,10 @@ def run_analysis(
     z = best_solution.x[: m * n_dims].reshape(m, n_dims)
     a = best_solution.x[m * n_dims : (m + k) * n_dims].reshape(k, n_dims)
     b = best_solution.x[(m + k) * n_dims :]
+
+    if n_dims == 1:
+        idx = outlets.index(sign_reference_outlet) if sign_reference_outlet is not None else 0
+        z, a, b = canonicalize_1d(z, a, b, sign_reference_idx=idx, sign_reference_positive=sign_reference_positive)
 
     bic = aproximate_bayesian_information_criteria(best_solution.fun, n_params, n_mentions)
 

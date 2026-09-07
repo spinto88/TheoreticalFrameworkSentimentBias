@@ -23,6 +23,7 @@ from src.service import (
     aproximate_bayesian_information_criteria,
     build_output,
     build_tensor,
+    canonicalize_1d,
     generate_data,
     generate_mentions,
     grad_negative_log_likelihood,
@@ -131,27 +132,6 @@ class TestBuildTensor:
         assert matrix.shape == (1, 1, 3)
         assert outlets == ["Solo"]
         assert subjects == ["Topic"]
-
-    def test_ignore_neutral_false_keeps_neutral_counts(self):
-        matrix, _, _ = build_tensor(SIMPLE_DATA, ignore_neutral=False)
-        assert matrix[..., 1].sum() == 6
-
-    def test_ignore_neutral_true_zeroes_neutral_counts(self):
-        matrix, outlets, subjects = build_tensor(SIMPLE_DATA, ignore_neutral=True)
-        assert matrix[..., 1].sum() == 0
-        # non-neutral counts and index ordering are unaffected
-        assert outlets == ["A", "B"]
-        assert subjects == ["X", "Y"]
-        a_idx, x_idx = outlets.index("A"), subjects.index("X")
-        assert matrix[a_idx, x_idx, 2] == 10
-        assert matrix[a_idx, x_idx, 0] == 3
-
-    def test_ignore_neutral_true_still_registers_outlet_subject_pair(self):
-        data = [make_mention("A", "X", "neutral", 5)]
-        matrix, outlets, subjects = build_tensor(data, ignore_neutral=True)
-        assert outlets == ["A"]
-        assert subjects == ["X"]
-        assert matrix.sum() == 0
 
 
 # ---------------------------------------------------------------------------
@@ -286,6 +266,74 @@ class TestBuildOutput:
     def test_returns_analysis_output_instance(self):
         result = self._call(["A"], ["X"], np.array([[0.0]]), np.array([[0.0]]), np.array([0.0]))
         assert isinstance(result, AnalysisOutput)
+
+
+# ---------------------------------------------------------------------------
+# canonicalize_1d
+# ---------------------------------------------------------------------------
+
+class TestCanonicalize1d:
+    """z/a/b are only identified up to z -> (z-c)/s, a -> a*s, b -> b + c*a."""
+
+    def _q(self, z, a, b):
+        """q_ij = dot(z_i, a_j) + b_j for every outlet/subject pair."""
+        return z @ a.T + b[np.newaxis, :]
+
+    def test_z_has_zero_mean_and_unit_std(self):
+        z = np.array([[3.0], [1.0], [-2.0]])
+        a = np.array([[0.6], [-1.4]])
+        b = np.array([0.3, -0.1])
+        z_new, _, _ = canonicalize_1d(z, a, b)
+        assert z_new.mean() == pytest.approx(0.0, abs=1e-12)
+        assert z_new.std() == pytest.approx(1.0)
+
+    def test_q_is_invariant(self):
+        z = np.array([[3.0], [1.0], [-2.0]])
+        a = np.array([[0.6], [-1.4]])
+        b = np.array([0.3, -0.1])
+        q_before = self._q(z, a, b)
+        z_new, a_new, b_new = canonicalize_1d(z, a, b)
+        q_after = self._q(z_new, a_new, b_new)
+        assert q_after == pytest.approx(q_before)
+
+    def test_default_reference_is_outlet_zero_positive(self):
+        z = np.array([[-3.0], [1.0], [2.0]])
+        a = np.array([[0.6]])
+        b = np.array([0.3])
+        z_new, _, _ = canonicalize_1d(z, a, b)
+        assert z_new[0, 0] > 0
+
+    def test_sign_reference_negative(self):
+        z = np.array([[-3.0], [1.0], [2.0]])
+        a = np.array([[0.6]])
+        b = np.array([0.3])
+        z_new, _, _ = canonicalize_1d(z, a, b, sign_reference_idx=0, sign_reference_positive=False)
+        assert z_new[0, 0] < 0
+
+    def test_sign_reference_selects_other_outlet(self):
+        z = np.array([[-3.0], [1.0], [2.0]])
+        a = np.array([[0.6]])
+        b = np.array([0.3])
+        z_new, _, _ = canonicalize_1d(z, a, b, sign_reference_idx=2, sign_reference_positive=False)
+        assert z_new[2, 0] < 0
+
+    def test_degenerate_single_outlet_returns_unchanged(self):
+        z = np.array([[2.0]])
+        a = np.array([[0.6], [-1.4]])
+        b = np.array([0.3, -0.1])
+        z_new, a_new, b_new = canonicalize_1d(z, a, b)
+        assert z_new is z
+        assert a_new is a
+        assert b_new is b
+
+    def test_degenerate_identical_outlets_returns_unchanged(self):
+        z = np.array([[2.0], [2.0]])
+        a = np.array([[0.6]])
+        b = np.array([0.3])
+        z_new, a_new, b_new = canonicalize_1d(z, a, b)
+        assert z_new is z
+        assert a_new is a
+        assert b_new is b
 
 
 # ---------------------------------------------------------------------------
@@ -447,15 +495,16 @@ class TestRunAnalysis:
 
     @patch("src.service.minimize")
     def test_parameters_within_bounds(self, mock_min):
+        """n_dims=2 is untouched by 1D canonicalization, so raw box bounds hold."""
         data = [
             make_mention("A", "X", "positive", 8),
             make_mention("B", "Y", "negative", 4),
         ]
-        # m=2, k=2, n_dims=1 → 6 params
+        # m=2, k=2, n_dims=2 → 10 params
         mock = MagicMock()
-        mock.x = np.random.default_rng(0).uniform(-5, 5, n_params(2, 2, 1))
+        mock.x = np.random.default_rng(0).uniform(-5, 5, n_params(2, 2, 2))
         mock_min.return_value = mock
-        result = run_analysis(data)
+        result = run_analysis(data, n_dims=2)
         for o in result.outlets:
             assert all(-5.0 <= v <= 5.0 for v in o.z)
         for s in result.subjects:
@@ -469,89 +518,58 @@ class TestRunAnalysis:
         mock_min.assert_called_once()
 
     @patch("src.service.minimize")
-    def test_ignore_neutral_excludes_neutral_counts_from_mentions_matrix(self, mock_min):
+    def test_1d_output_is_canonicalized(self, mock_min):
+        """n_dims=1 output has z standardized to zero mean / unit variance."""
         data = [
             make_mention("A", "X", "positive", 5),
-            make_mention("A", "X", "neutral", 100),
+            make_mention("B", "X", "positive", 5),
+            make_mention("C", "X", "positive", 5),
         ]
-        mock_min.return_value = self._mock_solution(1, 1)
-        run_analysis(data, ignore_neutral=True)
-        mentions_matrix = mock_min.call_args.kwargs["args"][0]
-        assert mentions_matrix[..., 1].sum() == 0
-        assert mentions_matrix[..., 2].sum() == 5
+        mock = MagicMock()
+        # x = [z_A, z_B, z_C, a_X, b_X]
+        mock.x = np.array([0.0, 3.0, 6.0, 0.5, 0.2])
+        mock.fun = 5.0
+        mock_min.return_value = mock
+        result = run_analysis(data)
+        z_values = np.array([o.z[0] for o in result.outlets])
+        assert z_values.mean() == pytest.approx(0.0, abs=1e-9)
+        assert z_values.std() == pytest.approx(1.0)
 
     @patch("src.service.minimize")
-    def test_ignore_neutral_default_keeps_neutral_counts(self, mock_min):
-        data = [make_mention("A", "X", "neutral", 100)]
-        mock_min.return_value = self._mock_solution(1, 1)
-        run_analysis(data)
-        mentions_matrix = mock_min.call_args.kwargs["args"][0]
-        assert mentions_matrix[..., 1].sum() == 100
-
-    @patch("src.service.minimize")
-    def test_fixed_a_pins_bounds_per_subject(self, mock_min):
-        """fixed_a collapses the a-slice of only the named subjects' bounds."""
+    def test_sign_reference_outlet_controls_sign(self, mock_min):
         data = [
             make_mention("A", "X", "positive", 5),
-            make_mention("A", "Y", "negative", 3),
+            make_mention("B", "X", "positive", 5),
         ]
-        # m=1, k=2, subjects sorted -> X at index 0, Y at index 1
-        # x = [z0, aX, aY, bX, bY] -> aX at index 1, aY at index 2
-        mock_min.return_value = self._mock_solution(1, 2)
-        run_analysis(data, fixed_a={"X": [1.0], "Y": [-1.0]})
-        bounds = mock_min.call_args.kwargs["bounds"]
-        assert bounds.lb[1] == bounds.ub[1] == pytest.approx(1.0)
-        assert bounds.lb[2] == bounds.ub[2] == pytest.approx(-1.0)
-        # z (index 0) and b (indices 3, 4) remain free at [-5, 5]
-        assert bounds.lb[0] == -5 and bounds.ub[0] == 5
-        assert bounds.lb[3] == -5 and bounds.ub[3] == 5
-        assert bounds.lb[4] == -5 and bounds.ub[4] == 5
+        mock = MagicMock()
+        # x = [z_A, z_B, a_X, b_X], already zero mean / unit variance
+        mock.x = np.array([1.0, -1.0, 0.5, 0.2])
+        mock.fun = 5.0
+        mock_min.return_value = mock
+
+        default_result = run_analysis(data)
+        by_outlet = {o.outlet: o.z[0] for o in default_result.outlets}
+        assert by_outlet["A"] == pytest.approx(1.0)
+        assert by_outlet["B"] == pytest.approx(-1.0)
+
+        flipped_result = run_analysis(data, sign_reference_outlet="B", sign_reference_positive=True)
+        by_outlet = {o.outlet: o.z[0] for o in flipped_result.outlets}
+        assert by_outlet["B"] == pytest.approx(1.0)
+        assert by_outlet["A"] == pytest.approx(-1.0)
 
     @patch("src.service.minimize")
-    def test_fixed_a_only_pins_named_subject(self, mock_min):
-        """Subjects absent from fixed_a keep the default [-5, 5] bounds."""
-        data = [
-            make_mention("A", "X", "positive", 5),
-            make_mention("A", "Y", "negative", 3),
-        ]
-        mock_min.return_value = self._mock_solution(1, 2)
-        run_analysis(data, fixed_a={"X": [1.0]})
-        bounds = mock_min.call_args.kwargs["bounds"]
-        assert bounds.lb[1] == bounds.ub[1] == pytest.approx(1.0)
-        assert bounds.lb[2] == -5 and bounds.ub[2] == 5
-
-    @patch("src.service.minimize")
-    def test_fixed_a_none_leaves_bounds_unrestricted(self, mock_min):
-        mock_min.return_value = self._mock_solution(1, 1)
-        run_analysis([make_mention("A", "X", "positive", 1)])
-        bounds = mock_min.call_args.kwargs["bounds"]
-        assert all(lb == -5 for lb in bounds.lb)
-        assert all(ub == 5 for ub in bounds.ub)
-
-    @patch("src.service.minimize")
-    def test_fixed_a_empty_dict_leaves_bounds_unrestricted(self, mock_min):
-        mock_min.return_value = self._mock_solution(1, 1)
-        run_analysis([make_mention("A", "X", "positive", 1)], fixed_a={})
-        bounds = mock_min.call_args.kwargs["bounds"]
-        assert all(lb == -5 for lb in bounds.lb)
-        assert all(ub == 5 for ub in bounds.ub)
-
-    @patch("src.service.minimize")
-    def test_fixed_a_two_dimensions_pins_both_components(self, mock_min):
-        data = [make_mention("A", "X", "positive", 1)]
-        mock_min.return_value = self._mock_solution(1, 1, n_dims=2)
-        run_analysis(data, n_dims=2, fixed_a={"X": [1.0, -2.0]})
-        bounds = mock_min.call_args.kwargs["bounds"]
-        # x = [z0, z1, a0, a1, b] -> a occupies indices [2, 3]
-        assert bounds.lb[2] == bounds.ub[2] == pytest.approx(1.0)
-        assert bounds.lb[3] == bounds.ub[3] == pytest.approx(-2.0)
-
-    @patch("src.service.minimize")
-    def test_fixed_a_initial_guess_respects_pinned_bounds(self, mock_min):
-        mock_min.return_value = self._mock_solution(1, 1)
-        run_analysis([make_mention("A", "X", "positive", 1)], fixed_a={"X": [3.0]})
-        x0 = mock_min.call_args.kwargs["x0"]
-        assert x0[1] == pytest.approx(3.0)
+    def test_two_dimensions_not_canonicalized(self, mock_min):
+        """n_dims=2 output is returned as-is, without standardization."""
+        data = [make_mention("A", "X", "positive", 1), make_mention("B", "X", "positive", 1)]
+        mock = MagicMock()
+        # x = [z_A(2), z_B(2), a_X(2), b_X] -> m=2, k=1, n_dims=2
+        mock.x = np.array([0.0, 1.0, 3.0, -2.0, 0.5, 0.1, 0.2])
+        mock.fun = 5.0
+        mock_min.return_value = mock
+        result = run_analysis(data, n_dims=2)
+        by_outlet = {o.outlet: o.z for o in result.outlets}
+        assert by_outlet["A"] == pytest.approx([0.0, 1.0])
+        assert by_outlet["B"] == pytest.approx([3.0, -2.0])
 
     @patch("src.service.minimize")
     def test_returns_analysis_output(self, mock_min):

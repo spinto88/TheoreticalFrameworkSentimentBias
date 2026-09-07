@@ -47,8 +47,8 @@ def analyze(input_data: AnalysisInput) -> AnalysisOutput:
         input_data.data,
         n_dims=input_data.n_dimensions,
         n_restarts=input_data.n_restarts,
-        ignore_neutral=input_data.ignore_neutral,
-        fixed_a=input_data.fixed_a,
+        sign_reference_outlet=input_data.sign_reference_outlet,
+        sign_reference_positive=input_data.sign_reference_positive,
     )
 
 

@@ -16,7 +16,7 @@ Pydantic schemas for the /analyze and /generate endpoints.
                generative model.
 """
 
-from typing import Dict, List, Literal, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -51,42 +51,41 @@ class AnalysisInput(BaseModel):
             each from a different random initialisation. The restart with
             the lowest loss is returned. Defaults to 1 (a single run); any
             positive value is accepted.
-        ignore_neutral: If True, neutral mention counts are treated as 0
-            (excluded from the fit entirely) before the model is run.
-            Defaults to False.
-        fixed_a: If provided, maps a subject name to a discrimination
-            vector (length D) that subject's ``a`` is held at instead of
-            being estimated. Subjects absent from this mapping are still
-            estimated normally. Every key must match a subject present in
-            ``data``, and every value must have exactly ``n_dimensions``
-            entries. Defaults to None (``a`` is estimated for every
-            subject).
+        sign_reference_outlet: Only meaningful when ``n_dimensions == 1``,
+            where the fitted ``z``/``a``/``b`` are canonicalized (zero
+            mean / unit variance on ``z``) since the 1-D model is only
+            identified up to sign and scale. Names the outlet whose
+            canonicalized ``z`` sign is controlled by
+            ``sign_reference_positive``. Must match an outlet present in
+            ``data``. Defaults to None, meaning the first outlet
+            (alphabetically) is used as the reference.
+        sign_reference_positive: Only used when ``sign_reference_outlet``
+            is set. Whether the reference outlet's canonicalized ``z``
+            should be positive (default) or negative.
     """
 
     data: List[Mention]
     n_dimensions: int = Field(1, ge=1, le=2)
     n_restarts: int = Field(1, ge=1)
-    ignore_neutral: bool = False
-    fixed_a: Optional[Dict[str, List[float]]] = None
+    sign_reference_outlet: Optional[str] = None
+    sign_reference_positive: bool = True
 
     @model_validator(mode="after")
-    def _check_fixed_a(self) -> "AnalysisInput":
-        if self.fixed_a is None:
+    def _check_sign_reference(self) -> "AnalysisInput":
+        if self.sign_reference_outlet is None:
             return self
 
-        known_subjects = {m.subject for m in self.data}
-        for subject, vector in self.fixed_a.items():
-            if subject not in known_subjects:
-                raise ValueError(
-                    f"fixed_a references subject {subject!r}, which is not "
-                    f"present in data."
-                )
-            if len(vector) != self.n_dimensions:
-                raise ValueError(
-                    f"fixed_a[{subject!r}] must have exactly "
-                    f"{self.n_dimensions} entries (one per latent "
-                    f"dimension), got {len(vector)}."
-                )
+        if self.n_dimensions != 1:
+            raise ValueError(
+                "sign_reference_outlet is only meaningful when n_dimensions == 1."
+            )
+
+        known_outlets = {m.outlet for m in self.data}
+        if self.sign_reference_outlet not in known_outlets:
+            raise ValueError(
+                f"sign_reference_outlet {self.sign_reference_outlet!r} is not "
+                f"present in data."
+            )
         return self
 
 
