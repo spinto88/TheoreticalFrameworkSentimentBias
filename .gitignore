@@ -1,8 +1,25 @@
-*.json
-!data/*.json
-*ipynb*
-!notebooks/*.ipynb
-env
-*cache*
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# Entornos virtuales
+env/
+.venv/
+venv/
+
+# Runtime del servidor
 server.pid
 server.log
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Locks de ofimática (Paper/)
+.~lock.*#
+
+# Claude Code
+.claude/settings.local.json
