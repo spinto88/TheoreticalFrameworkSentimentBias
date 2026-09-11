@@ -2,10 +2,12 @@
 
 A Python package for estimating latent sentiment bias in media coverage.  Given a dataset of mention counts broken down by outlet, subject, and sentiment polarity, the model infers a set of parameters that explain how each outlet's editorial slant interacts with each subject's intrinsic reception.
 
-It can be used in two ways:
+It can be used in two independent ways, and you only need to set up the one you want:
 
-- **As a library** — `import sentiment_bias as sb` from any notebook or script.  This is all most people need.
-- **As an HTTP service** — an optional FastAPI server with a browser frontend, for running the model without writing code.
+- **As a library** — `import sentiment_bias as sb` from any notebook or script. Nothing runs in the background, no localhost, no web dependencies. This is all most people need; see [As a library](#as-a-library-no-localhost-no-server).
+- **As an HTTP service** — an optional FastAPI server with a browser frontend, for running the model without writing code, and for sharing it with people who don't use Python. See [Run the API](#run-the-api) and [Deploy on a server](#deploy-on-a-server).
+
+The HTTP layer is built on top of the library, so the model behaves identically either way.
 
 ---
 
@@ -46,7 +48,19 @@ With `D=1` the model is only identified up to an affine reparametrisation of `z`
 
 ## Installation
 
-The package is **not** on PyPI.  Clone the repository and install it into a virtual environment:
+The package is **not** on PyPI.  You install it from a clone of this repository, into a virtual environment.  Requires Python 3.10 or newer.
+
+Pick the path that matches what you want to do:
+
+| You want to… | Install | Then |
+|---|---|---|
+| Run the model from your own notebooks or scripts, no server involved | `pip install -e .` | [Use as a library](#use-as-a-library) |
+| Serve the web interface to other people | `pip install -e ".[api]"` | [Deploy on a server](#deploy-on-a-server) |
+| Work on this codebase | `pip install -e ".[api,dev,nb]"` | [Tests](#tests) |
+
+### As a library (no localhost, no server)
+
+This is all you need if you just want to fit the model in Python.  It installs **only** numpy, scipy and pandas — no FastAPI, no web stack:
 
 ```bash
 git clone <repository-url>
@@ -55,21 +69,54 @@ cd TheoreticalFrameworkSentimentBias
 python3 -m venv .venv
 source .venv/bin/activate
 
-pip install -e .              # the model only (numpy, scipy, pandas)
+pip install -e .
 ```
 
-`-e` installs in *editable* mode: edits under `src/` take effect immediately, with no reinstall.  Once installed, `import sentiment_bias` works from any directory.
-
-Optional extras:
+That's it.  Verify it worked from a directory *outside* the repository — if this prints a version, the install is good and nothing depends on your working directory:
 
 ```bash
-pip install -e ".[api]"       # + FastAPI server and frontend
-pip install -e ".[dev]"       # + pytest, httpx
-pip install -e ".[nb]"        # + jupyter, matplotlib, requests
+cd ~ && python -c "import sentiment_bias as sb; print(sb.__version__)"
+```
+
+Now use it from any notebook or script, with no `sys.path` juggling and nothing running in the background:
+
+```python
+import sentiment_bias as sb
+
+fit = sb.fit(sb.read_csv("mentions.csv"))
+```
+
+If your notebook runs on a different kernel than this virtual environment, register it once:
+
+```bash
+pip install ipykernel
+python -m ipykernel install --user --name sentiment-bias
+```
+
+### Extras
+
+```bash
+pip install -e ".[api]"          # + FastAPI server and frontend
+pip install -e ".[dev]"          # + pytest, httpx
+pip install -e ".[nb]"           # + jupyter, matplotlib, requests
 pip install -e ".[api,dev,nb]"   # everything
 ```
 
-Requires Python 3.10 or newer.
+### What `-e` means
+
+`-e` installs in *editable* mode: the virtual environment points at `src/` in your clone rather than copying it, so your edits take effect on the next Python start with no reinstall.  Frontend edits need nothing but a page reload.
+
+Reinstall (`pip install -e .` again) only when you change `pyproject.toml` — for example after adding a dependency, or to pick up a new console script.
+
+### Upgrading an existing clone
+
+```bash
+git pull
+source .venv/bin/activate
+pip install -e ".[api]"    # only needed if pyproject.toml changed
+```
+
+If you have an older clone from before the package restructure, its virtual environment (often `env/`) predates the new layout and will not work.  Create a fresh one as above; you can delete the old directory.
 
 ---
 
@@ -183,15 +230,97 @@ FoxNews,Economy,9,0,0
 
 ## Run the API
 
-Requires the `api` extra.
+You only need this if you want the web interface.  Requires the `api` extra, and the virtual environment must be **activated** — `run.sh` calls the `sentiment-bias-api` console script, which lives inside it.
 
 ```bash
-sentiment-bias-api                                   # honours SENTIMENT_BIAS_HOST / _PORT
-bash run.sh                                          # same, backgrounded with a PID/log file
-uvicorn sentiment_bias.api.app:app --reload          # development, with auto-reload
+source .venv/bin/activate
+
+sentiment-bias-api                             # foreground
+bash run.sh                                    # background, writes server.pid and server.log
+uvicorn sentiment_bias.api.app:app --reload    # development, reloads on source edits
 ```
 
-The application is available at `http://localhost:8000`.  `bash run.sh` writes `server.pid` and `server.log`; stop it with `kill $(cat server.pid)`.
+The application is then at `http://localhost:8000`, with interactive API docs at `/docs`.  Stop the backgrounded server with `kill $(cat server.pid)`.
+
+Host and port come from the environment, defaulting to `0.0.0.0:8000`:
+
+```bash
+SENTIMENT_BIAS_HOST=127.0.0.1 SENTIMENT_BIAS_PORT=9000 sentiment-bias-api
+```
+
+Note the default binds to **all** interfaces, so the server is reachable from other machines as soon as the port is open.  Use `127.0.0.1` to keep it local.
+
+---
+
+## Deploy on a server
+
+`run.sh` is fine for a quick session, but it dies with your shell and won't come back after a reboot.  For something you leave running, use a systemd unit.
+
+Install the package as a dedicated user, then create `/etc/systemd/system/sentiment-bias.service`:
+
+```ini
+[Unit]
+Description=Sentiment Bias Analyzer
+After=network.target
+
+[Service]
+Type=simple
+User=sentiment-bias
+WorkingDirectory=/srv/sentiment-bias
+Environment=SENTIMENT_BIAS_HOST=127.0.0.1
+Environment=SENTIMENT_BIAS_PORT=8000
+ExecStart=/srv/sentiment-bias/.venv/bin/sentiment-bias-api
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now sentiment-bias
+systemctl status sentiment-bias
+journalctl -u sentiment-bias -f        # logs
+```
+
+Pointing `ExecStart` straight at the console script inside the virtual environment means there is nothing to activate — no shell involved.
+
+### Behind a reverse proxy
+
+Bind the app to `127.0.0.1` (as above) and let nginx terminate TLS and face the network:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name sentiment-bias.example.edu;
+
+    # ssl_certificate / ssl_certificate_key ...
+
+    client_max_body_size 32m;          # mention files can be large
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;       # a fit with many restarts is slow
+    }
+}
+```
+
+Two things worth knowing before you expose this:
+
+- **Requests are CPU-bound.** The routes are synchronous, so FastAPI runs them in a thread pool rather than blocking the event loop — but the optimiser is pure Python, so concurrent fits contend for the GIL and each one slows the others down. A fit with a large dataset and many restarts can take minutes, hence the generous proxy timeout. If several people will use it at once, run separate worker *processes* instead of the console script: `ExecStart=/srv/sentiment-bias/.venv/bin/uvicorn sentiment_bias.api.app:app --host 127.0.0.1 --workers 4`.
+- **There is no authentication, rate limiting or request-size cap in the app.** Anyone who can reach the port can post an arbitrarily large job. On a public address, put access control in the proxy (HTTP basic auth, an IP allowlist, or a VPN) or keep it on an internal network.
+
+### Updating a deployment
+
+```bash
+cd /srv/sentiment-bias
+sudo -u sentiment-bias git pull
+sudo -u sentiment-bias .venv/bin/pip install -e ".[api]"   # only if pyproject.toml changed
+sudo systemctl restart sentiment-bias
+```
 
 ### `POST /analyze`
 
