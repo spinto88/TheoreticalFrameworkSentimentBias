@@ -1,14 +1,14 @@
 """
-Unit tests for src.schemas.
+Unit tests for sentiment_bias.api.schemas.
 
-Verifies that Pydantic models accept valid input and reject invalid input
-with appropriate validation errors.
+Verifies that the Pydantic wire-format models accept valid input and reject
+invalid input with appropriate validation errors.
 """
 
 import pytest
 from pydantic import ValidationError
 
-from src.schemas import (
+from sentiment_bias.api.schemas import (
     AnalysisInput,
     AnalysisOutput,
     GenerateInput,
@@ -73,37 +73,32 @@ class TestMention:
 class TestAnalysisInput:
     def test_valid_single_mention(self):
         m = Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=3)
-        inp = AnalysisInput(data=[m])
-        assert len(inp.data) == 1
+        assert len(AnalysisInput(data=[m]).data) == 1
 
     def test_valid_multiple_mentions(self):
         mentions = [
             Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=i)
             for i in range(5)
         ]
-        inp = AnalysisInput(data=mentions)
-        assert len(inp.data) == 5
+        assert len(AnalysisInput(data=mentions).data) == 5
 
     def test_empty_list_is_valid(self):
-        inp = AnalysisInput(data=[])
-        assert inp.data == []
+        assert AnalysisInput(data=[]).data == []
 
     def test_invalid_mention_inside_list_raises(self):
         with pytest.raises(ValidationError):
             AnalysisInput(data=[{"outlet": "A", "subject": "X",
-                                  "mention_type": "UNKNOWN", "amount_of_mentions": 1}])
+                                 "mention_type": "UNKNOWN", "amount_of_mentions": 1}])
 
     def test_missing_data_field_raises(self):
         with pytest.raises(ValidationError):
             AnalysisInput()
 
     def test_default_n_dimensions_is_one(self):
-        inp = AnalysisInput(data=[])
-        assert inp.n_dimensions == 1
+        assert AnalysisInput(data=[]).n_dimensions == 1
 
     def test_n_dimensions_two_is_valid(self):
-        inp = AnalysisInput(data=[], n_dimensions=2)
-        assert inp.n_dimensions == 2
+        assert AnalysisInput(data=[], n_dimensions=2).n_dimensions == 2
 
     def test_n_dimensions_zero_raises(self):
         with pytest.raises(ValidationError):
@@ -114,28 +109,23 @@ class TestAnalysisInput:
             AnalysisInput(data=[], n_dimensions=3)
 
     def test_default_n_restarts_is_one(self):
-        inp = AnalysisInput(data=[])
-        assert inp.n_restarts == 1
+        assert AnalysisInput(data=[]).n_restarts == 1
 
     def test_n_restarts_custom_value_is_valid(self):
-        inp = AnalysisInput(data=[], n_restarts=10)
-        assert inp.n_restarts == 10
+        assert AnalysisInput(data=[], n_restarts=10).n_restarts == 10
 
     def test_n_restarts_zero_raises(self):
         with pytest.raises(ValidationError):
             AnalysisInput(data=[], n_restarts=0)
 
     def test_n_restarts_arbitrarily_large_is_valid(self):
-        inp = AnalysisInput(data=[], n_restarts=500)
-        assert inp.n_restarts == 500
+        assert AnalysisInput(data=[], n_restarts=500).n_restarts == 500
 
     def test_default_sign_reference_outlet_is_none(self):
-        inp = AnalysisInput(data=[])
-        assert inp.sign_reference_outlet is None
+        assert AnalysisInput(data=[]).sign_reference_outlet is None
 
     def test_default_sign_reference_positive_is_true(self):
-        inp = AnalysisInput(data=[])
-        assert inp.sign_reference_positive is True
+        assert AnalysisInput(data=[]).sign_reference_positive is True
 
     def test_sign_reference_outlet_matching_data_is_valid(self):
         mentions = [Mention(outlet="A", subject="X", mention_type="positive", amount_of_mentions=1)]
@@ -169,12 +159,10 @@ class TestOutletScore:
         assert score.z == pytest.approx([1.23])
 
     def test_valid_two_dimensions(self):
-        score = OutletScore(outlet="A", z=[1.0, -0.5])
-        assert score.z == pytest.approx([1.0, -0.5])
+        assert OutletScore(outlet="A", z=[1.0, -0.5]).z == pytest.approx([1.0, -0.5])
 
     def test_negative_z_is_valid(self):
-        score = OutletScore(outlet="A", z=[-3.5])
-        assert score.z == pytest.approx([-3.5])
+        assert OutletScore(outlet="A", z=[-3.5]).z == pytest.approx([-3.5])
 
     def test_missing_z_raises(self):
         with pytest.raises(ValidationError):
@@ -198,8 +186,7 @@ class TestSubjectScore:
         assert score.b == pytest.approx(0.1)
 
     def test_b_is_scalar(self):
-        score = SubjectScore(subject="X", a=[1.0], b=0.5)
-        assert isinstance(score.b, float)
+        assert isinstance(SubjectScore(subject="X", a=[1.0], b=0.5).b, float)
 
     def test_missing_a_raises(self):
         with pytest.raises(ValidationError):
@@ -226,8 +213,7 @@ class TestAnalysisOutput:
         assert len(output.subjects) == 1
 
     def test_loss_is_stored(self):
-        output = AnalysisOutput(outlets=[], subjects=[], loss=7.5, bic=15.0)
-        assert output.loss == pytest.approx(7.5)
+        assert AnalysisOutput(outlets=[], subjects=[], loss=7.5, bic=15.0).loss == pytest.approx(7.5)
 
     def test_empty_lists_are_valid(self):
         output = AnalysisOutput(outlets=[], subjects=[], loss=0.0, bic=0.0)
@@ -243,8 +229,7 @@ class TestAnalysisOutput:
             AnalysisOutput(outlets=[], subjects=[], loss=0.0)
 
     def test_default_n_restarts_is_one(self):
-        output = AnalysisOutput(outlets=[], subjects=[], loss=0.0, bic=0.0)
-        assert output.n_restarts == 1
+        assert AnalysisOutput(outlets=[], subjects=[], loss=0.0, bic=0.0).n_restarts == 1
 
     def test_n_restarts_custom_value_is_stored(self):
         output = AnalysisOutput(outlets=[], subjects=[], loss=0.0, bic=0.0, n_restarts=5)
@@ -296,3 +281,14 @@ class TestGenerateInput:
     def test_subjects_accept_two_dimensions(self):
         inp = self._make(subjects=[SubjectScore(subject="X", a=[0.8, 0.3], b=0.2)])
         assert inp.subjects[0].a == pytest.approx([0.8, 0.3])
+
+    def test_poisson_defaults_to_false(self):
+        """The default keeps the pre-Poisson wire format working unchanged."""
+        assert self._make().poisson is False
+
+    def test_poisson_can_be_enabled(self):
+        assert self._make(poisson=True).poisson is True
+
+    def test_poisson_rejects_non_boolean(self):
+        with pytest.raises(ValidationError):
+            self._make(poisson="maybe")
