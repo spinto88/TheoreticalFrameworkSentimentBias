@@ -52,9 +52,9 @@ class AnalysisInput(BaseModel):
             the lowest loss is returned. Defaults to 1 (a single run); any
             positive value is accepted.
         sign_reference_outlet: Only meaningful when ``n_dimensions == 1``,
-            where the fitted ``z``/``a``/``b`` are canonicalized (zero
-            mean / unit variance on ``z``) since the 1-D model is only
-            identified up to sign and scale. Names the outlet whose
+            where the fitted ``z``/``a``/``b`` are canonicalized
+            (``sum(z) == 0`` and ``sum(z**2) == 1``) since the 1-D model is
+            only identified up to sign and scale. Names the outlet whose
             canonicalized ``z`` sign is controlled by
             ``sign_reference_positive``. Must match an outlet present in
             ``data``. Defaults to None, meaning the first outlet

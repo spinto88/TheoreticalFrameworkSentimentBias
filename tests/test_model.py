@@ -268,13 +268,32 @@ class TestCanonicalize1d:
         """q_ij = dot(z_i, a_j) + b_j for every outlet/subject pair."""
         return z @ a.T + b[np.newaxis, :]
 
-    def test_z_has_zero_mean_and_unit_std(self):
+    def test_z_has_zero_sum_and_unit_norm(self):
         z = np.array([[3.0], [1.0], [-2.0]])
         a = np.array([[0.6], [-1.4]])
         b = np.array([0.3, -0.1])
         z_new, _, _ = canonicalize_1d(z, a, b)
-        assert z_new.mean() == pytest.approx(0.0, abs=1e-12)
-        assert z_new.std() == pytest.approx(1.0)
+        assert z_new.sum() == pytest.approx(0.0, abs=1e-12)
+        assert (z_new ** 2).sum() == pytest.approx(1.0)
+
+    @pytest.mark.parametrize("m", [2, 3, 10, 50])
+    def test_unit_norm_holds_for_any_number_of_outlets(self, m):
+        rng = np.random.default_rng(0)
+        z = rng.normal(size=(m, 1))
+        a = np.array([[0.6], [-1.4]])
+        b = np.array([0.3, -0.1])
+        z_new, _, _ = canonicalize_1d(z, a, b)
+        assert (z_new ** 2).sum() == pytest.approx(1.0)
+        # Unit norm, not unit variance: the two differ by sqrt(m).
+        assert z_new.var() == pytest.approx(1.0 / m)
+
+    def test_a_absorbs_the_full_scale(self):
+        z = np.array([[3.0], [1.0], [-2.0]])
+        a = np.array([[0.6], [-1.4]])
+        b = np.array([0.3, -0.1])
+        scale = np.sqrt(((z[:, 0] - z[:, 0].mean()) ** 2).sum())
+        _, a_new, _ = canonicalize_1d(z, a, b)
+        np.testing.assert_allclose(np.abs(a_new[:, 0]), np.abs(a[:, 0] * scale))
 
     def test_q_is_invariant(self):
         z = np.array([[3.0], [1.0], [-2.0]])

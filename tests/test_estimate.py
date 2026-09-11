@@ -312,29 +312,30 @@ class TestValidation:
 class TestCanonicalization:
     @patch("sentiment_bias.estimate.minimize")
     def test_1d_output_is_canonicalized(self, mock_min):
-        """n_dimensions=1 output has z standardized to zero mean / unit variance."""
+        """n_dimensions=1 output has sum(z) == 0 and sum(z**2) == 1."""
         data = [record(o, "X", "positive", 5) for o in ["A", "B", "C"]]
         # x = [z_A, z_B, z_C, a_X, b_X]
         mock_min.return_value = solution(
             3, 1, x=np.array([0.0, 3.0, 6.0, 0.5, 0.2])
         )
         z = fit(data).z["dim_1"].to_numpy()
-        assert z.mean() == pytest.approx(0.0, abs=1e-9)
-        assert z.std() == pytest.approx(1.0)
+        assert z.sum() == pytest.approx(0.0, abs=1e-9)
+        assert (z ** 2).sum() == pytest.approx(1.0)
 
     @patch("sentiment_bias.estimate.minimize")
     def test_sign_reference_outlet_controls_sign(self, mock_min):
         data = [record(o, "X", "positive", 5) for o in ["A", "B"]]
-        # x = [z_A, z_B, a_X, b_X], already zero mean / unit variance
+        # x = [z_A, z_B, a_X, b_X]. Unit norm sends [1, -1] to [1, -1]/sqrt(2).
         mock_min.return_value = solution(2, 1, x=np.array([1.0, -1.0, 0.5, 0.2]))
+        half = 1.0 / np.sqrt(2.0)
 
         default = fit(data).z["dim_1"]
-        assert default["A"] == pytest.approx(1.0)
-        assert default["B"] == pytest.approx(-1.0)
+        assert default["A"] == pytest.approx(half)
+        assert default["B"] == pytest.approx(-half)
 
         flipped = fit(data, sign_reference_outlet="B", sign_reference_positive=True).z["dim_1"]
-        assert flipped["B"] == pytest.approx(1.0)
-        assert flipped["A"] == pytest.approx(-1.0)
+        assert flipped["B"] == pytest.approx(half)
+        assert flipped["A"] == pytest.approx(-half)
 
     @patch("sentiment_bias.estimate.minimize")
     def test_sign_reference_positive_false(self, mock_min):

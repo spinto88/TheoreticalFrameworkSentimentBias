@@ -240,16 +240,27 @@ def canonicalize_1d(
     sign_reference_idx: int = 0,
     sign_reference_positive: bool = True,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
-    """Standardize 1-D outlet bias to zero mean / unit variance.
+    """Standardize 1-D outlet bias to zero sum / unit sum of squares.
 
     The likelihood is invariant under ``z -> (z - c) / s``,
     ``a -> a * s``, ``b -> b + c * a`` for any ``c``/``s``, so the raw
     optimizer output has no fixed scale or sign. This picks the
-    representative with ``z`` at zero mean / unit variance (absorbing
+    representative with ``sum(z) == 0`` and ``sum(z**2) == 1`` (absorbing
     the rescaling into ``a`` and the mean shift into ``b`` so that
     ``q_ij = dot(z, a) + b`` is unchanged), then flips the sign of
     ``z`` and ``a`` if needed so that ``z[sign_reference_idx]`` has the
     requested sign.
+
+    Note this is unit *norm*, not unit variance: the two differ by a
+    factor of ``sqrt(m)``, and with zero mean they are mutually
+    exclusive, since ``sum(z**2) == m * var(z)``. Under this convention
+    ``var(z) == 1 / m``, and ``a`` is correspondingly ``sqrt(m)`` times
+    larger than it would be under unit variance.
+
+    This runs *after* the optimisation, so it is purely a change of
+    representation: the box constraints apply to the raw parameter
+    vector, and the canonicalized ``a`` returned here is not bounded
+    by them.
 
     Args:
         z: Estimated bias scores, shape ``(m, 1)``.
@@ -267,12 +278,14 @@ def canonicalize_1d(
     z_flat = z[:, 0]
     a_flat = a[:, 0]
 
-    z_mean, z_std = z_flat.mean(), z_flat.std()
-    if z_std == 0:
+    z_mean = z_flat.mean()
+    z_centred = z_flat - z_mean
+    scale = float(np.sqrt(np.sum(z_centred ** 2)))
+    if scale == 0:
         return z, a, b  # degenerate: all outlets identical (or a single outlet)
 
-    z_new = (z_flat - z_mean) / z_std
-    a_new = a_flat * z_std
+    z_new = z_centred / scale
+    a_new = a_flat * scale
     b_new = b + z_mean * a_flat
 
     ref = z_new[sign_reference_idx]

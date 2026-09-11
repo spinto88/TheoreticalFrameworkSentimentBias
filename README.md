@@ -42,7 +42,17 @@ Parameters are estimated by maximising a **penalised log-likelihood** with Gauss
 
 The objective is non-convex, so the solver can settle into different local minima depending on its initialisation.  Use `n_restarts` to run several independent restarts and keep the best; `fit.losses` reports every restart's final loss, which tells you whether they agreed.
 
-With `D=1` the model is only identified up to an affine reparametrisation of `z`, so the fitted parameters are canonicalized: `z` is standardised to zero mean and unit variance, with the rescaling absorbed into `a` and the shift into `b`.  The remaining sign ambiguity is pinned by `sign_reference_outlet`.
+With `D=1` the model is only identified up to an affine reparametrisation of `z`, so the fitted parameters are canonicalized to
+
+```
+sum(z) = 0        sum(z²) = 1
+```
+
+with the rescaling absorbed into `a` and the shift into `b`, leaving every `q_ij` unchanged.  The remaining sign ambiguity is pinned by `sign_reference_outlet`.
+
+Note this is unit **norm**, not unit variance.  With zero mean the two are mutually exclusive — `sum(z²) = m · var(z)` — so under this convention `var(z) = 1/m`, and `a` is `√m` times larger than it would be under unit variance.  Canonicalization runs after the optimisation, so it is purely a change of representation: the `[-5, 5]` box constrains the raw parameter vector, not the reported `a`.
+
+With `D > 1` the output is **not** canonicalized: it comes straight from the optimiser, with no centring, scaling, sign or rotation convention applied.
 
 ---
 
