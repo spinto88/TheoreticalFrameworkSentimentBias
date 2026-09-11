@@ -7,7 +7,7 @@ if [ -f "$PID_FILE" ] && kill -0 "$(cat $PID_FILE)" 2>/dev/null; then
     exit 1
 fi
 
-nohup uvicorn src.app:app --host 0.0.0.0 --port 8000 >> "$LOG_FILE" 2>&1 &
+nohup sentiment-bias-api >> "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
 echo "Servidor iniciado (PID $!, log: $LOG_FILE)"
 echo "Para apagarlo: kill \$(cat $PID_FILE)"
