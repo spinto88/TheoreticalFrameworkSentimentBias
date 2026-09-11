@@ -1,28 +1,33 @@
 """
-FastAPI application entry point.
+FastAPI application: a thin HTTP layer over the sentiment_bias package.
 
 Routes
 ------
 POST /analyze
-    Accepts a JSON body matching :class:`~src.schemas.AnalysisInput` and
-    returns an :class:`~src.schemas.AnalysisOutput` with estimated bias
-    parameters.
+    Accepts a JSON body matching :class:`~sentiment_bias.api.schemas.AnalysisInput`
+    and returns an :class:`~sentiment_bias.api.schemas.AnalysisOutput` with
+    estimated bias parameters.
 
 POST /generate
-    Accepts a JSON body matching :class:`~src.schemas.GenerateInput` and
-    returns an :class:`~src.schemas.AnalysisInput` with synthetic mention
-    data sampled from the generative model.
+    Accepts a JSON body matching :class:`~sentiment_bias.api.schemas.GenerateInput`
+    and returns an :class:`~sentiment_bias.api.schemas.AnalysisInput` with
+    synthetic mention data sampled from the generative model.
 
 GET /
-    Serves the static frontend (``src/static/index.html``).
+    Serves the static frontend bundled with the package.
 """
+
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.schemas import AnalysisInput, AnalysisOutput, GenerateInput
-from src.service import run_analysis, generate_data
+from sentiment_bias import fit, simulate
+from sentiment_bias.api import adapters
+from sentiment_bias.api.schemas import AnalysisInput, AnalysisOutput, GenerateInput
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(
     title="Sentiment Bias Analyzer",
@@ -37,38 +42,52 @@ def analyze(input_data: AnalysisInput) -> AnalysisOutput:
 
     Args:
         input_data: Request body containing one or more
-            :class:`~src.schemas.Mention` observations.
+            :class:`~sentiment_bias.api.schemas.Mention` observations.
 
     Returns:
         Estimated *z* scores per outlet and (*a*, *b*) parameters per
         subject.
     """
-    return run_analysis(
-        input_data.data,
-        n_dims=input_data.n_dimensions,
+    tensor = adapters.tensor_from_mentions(input_data.data)
+    result = fit(
+        tensor,
+        n_dimensions=input_data.n_dimensions,
         n_restarts=input_data.n_restarts,
         sign_reference_outlet=input_data.sign_reference_outlet,
         sign_reference_positive=input_data.sign_reference_positive,
     )
+    return adapters.fit_to_output(result)
 
 
 @app.post("/generate", response_model=AnalysisInput)
 def generate(input_data: GenerateInput) -> AnalysisInput:
-    """Generate synthetic data from a list of ideological scores of outlets and subjects
+    """Generate synthetic mention data from known ideological scores.
 
     Args:
-        input_data: Request body containing expected
-          *z* scores per outlet and (*a*, *b*) parameters per subject.
+        input_data: Request body containing expected *z* scores per outlet
+            and (*a*, *b*) parameters per subject.
+
     Returns:
-        :class:`~src.schemas.Mention` observations.
-        
+        :class:`~sentiment_bias.api.schemas.Mention` observations sampled
+        from the generative model.
     """
-    return generate_data(outlets = input_data.outlets, subjects = input_data.subjects, amount_of_mentions = input_data.amount_of_mentions)
+    z, a, b, outlets, subjects = adapters.scores_to_arrays(
+        input_data.outlets, input_data.subjects
+    )
+    tensor = simulate(
+        z, a, b,
+        n_mentions="poisson" if input_data.poisson else input_data.amount_of_mentions,
+        mean_mentions=input_data.amount_of_mentions if input_data.poisson else None,
+        outlets=outlets,
+        subjects=subjects,
+    )
+    return adapters.tensor_to_input(tensor, n_dimensions=z.shape[1])
+
 
 @app.get("/")
 def read_index() -> FileResponse:
     """Serve the frontend SPA."""
-    return FileResponse("src/static/index.html")
+    return FileResponse(STATIC_DIR / "index.html")
 
 
-app.mount("/static", StaticFiles(directory="src/static"), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

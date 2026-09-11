@@ -150,10 +150,15 @@ class GenerateInput(BaseModel):
         outlets: Latent bias scores for each outlet to simulate.
         subjects: Discrimination and baseline parameters for each subject
             to simulate.
-        amount_of_mentions: Total number of mentions to draw for each
-            (outlet, subject) pair.  Defaults to 100.
+        amount_of_mentions: Number of mentions to draw for each
+            (outlet, subject) pair.  Defaults to 100.  When ``poisson`` is
+            true this is instead the mean of the Poisson distribution the
+            per-pair counts are drawn from.
+        poisson: Whether the number of mentions per pair should be drawn from
+            a Poisson distribution rather than being the same everywhere.
     """
 
     outlets: List[OutletScore]
     subjects: List[SubjectScore]
     amount_of_mentions: int = Field(100, ge=0)
+    poisson: bool = False
