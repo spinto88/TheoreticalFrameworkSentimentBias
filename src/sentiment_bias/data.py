@@ -57,6 +57,9 @@ class MentionTensor:
     def __post_init__(self) -> None:
         if self.counts.ndim != 3 or self.counts.shape[2] != 3:
             raise ValueError(f"counts must have shape (m, k, 3), got {self.counts.shape}")
+        if not np.issubdtype(self.counts.dtype, np.integer):
+            # Float counts would be silently truncated by every consumer.
+            raise TypeError(f"counts must have an integer dtype, got {self.counts.dtype}")
         if self.counts.shape[0] != len(self.outlets):
             raise ValueError(
                 f"counts has {self.counts.shape[0]} outlets but {len(self.outlets)} names were given"
@@ -165,7 +168,10 @@ def from_wide(
     if missing:
         raise ValueError(f"wide frame is missing columns: {sorted(missing)}")
 
-    long = df.melt(
+    # Melt only the columns we need: any other column the caller happens to
+    # carry (an 'amount_of_mentions' left over from a long frame, say) would
+    # collide with melt's value_name and fail deep inside pandas.
+    long = df[[outlet, subject, *sentiment_columns]].melt(
         id_vars=[outlet, subject],
         value_vars=list(sentiment_columns),
         var_name="mention_type",
@@ -289,7 +295,7 @@ def to_tensor(data: Any) -> MentionTensor:
         )
     if isinstance(data, np.ndarray):
         return from_array(data)
-    if isinstance(data, Iterable):
+    if isinstance(data, Iterable) and not isinstance(data, (str, bytes)):
         return from_records(data)
     raise TypeError(f"cannot build a MentionTensor from {type(data).__name__}")
 

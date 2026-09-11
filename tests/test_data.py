@@ -90,16 +90,27 @@ class TestMentionTensor:
 
     def test_rejects_outlet_name_count_mismatch(self):
         with pytest.raises(ValueError, match="outlets"):
-            MentionTensor(counts=np.zeros((2, 1, 3)), outlets=["A"], subjects=["X"])
+            MentionTensor(counts=np.zeros((2, 1, 3), dtype=int), outlets=["A"], subjects=["X"])
 
     def test_rejects_subject_name_count_mismatch(self):
         with pytest.raises(ValueError, match="subjects"):
-            MentionTensor(counts=np.zeros((1, 2, 3)), outlets=["A"], subjects=["X"])
+            MentionTensor(counts=np.zeros((1, 2, 3), dtype=int), outlets=["A"], subjects=["X"])
 
     def test_is_frozen(self):
         tensor = from_array(np.zeros((1, 1, 3)))
         with pytest.raises(Exception):
             tensor.counts = np.zeros((1, 1, 3))
+
+    def test_rejects_float_counts(self):
+        # Float counts would be silently truncated by n_mentions and the model.
+        with pytest.raises(TypeError, match="integer dtype"):
+            MentionTensor(counts=np.full((1, 1, 3), 1.7), outlets=["A"], subjects=["X"])
+
+    def test_from_array_casts_float_counts(self):
+        # The constructors are allowed to take float input; they cast.
+        tensor = from_array(np.full((1, 1, 3), 2.0))
+        assert np.issubdtype(tensor.counts.dtype, np.integer)
+        assert tensor.n_mentions == 6
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +293,24 @@ class TestFromWide:
         assert tensor.outlets == ["A"]
         assert tensor.subjects == ["X"]
 
+    def test_ignores_extra_columns(self):
+        # A frame carrying leftovers from a long layout used to blow up inside
+        # pandas, because 'amount_of_mentions' collided with melt's value_name.
+        df = pd.DataFrame([{
+            "outlet": "A", "subject": "X",
+            "negative": 1, "neutral": 2, "positive": 3,
+            "mention_type": "positive", "amount_of_mentions": 99, "note": "ignorar",
+        }])
+        np.testing.assert_array_equal(from_wide(df).counts[0, 0], [1, 2, 3])
+
+    def test_extra_columns_via_to_tensor(self):
+        df = pd.DataFrame([{
+            "outlet": "A", "subject": "X",
+            "negative": 1, "neutral": 2, "positive": 3,
+            "amount_of_mentions": 99,
+        }])
+        assert to_tensor(df).n_mentions == 6
+
 
 # ---------------------------------------------------------------------------
 # from_records
@@ -390,6 +419,12 @@ class TestToTensor:
     def test_unsupported_type_raises_type_error(self):
         with pytest.raises(TypeError):
             to_tensor(42)
+
+    def test_string_raises_type_error(self):
+        # A str is Iterable, so it used to fall through to from_records and
+        # die with an AttributeError about 'outlet'.
+        with pytest.raises(TypeError, match="cannot build a MentionTensor"):
+            to_tensor("hello")
 
     def test_wide_wins_over_leftover_mention_type_column(self):
         """A frame with the wide columns is read as wide, extra columns ignored."""
