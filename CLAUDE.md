@@ -71,7 +71,7 @@ The `D=1` canonicalization convention is **unit norm**: `sum(z) == 0` and `sum(z
 
 ### Notebooks (`notebooks/`)
 
-`Usar_service_directo.ipynb` (in-process use) and `Ejemplo_llamar_API_modelo.ipynb` (HTTP client) are worked examples. The other five (`DataFitting*`, `SyntheticDataEstimation*`, `Model_consistency`) predate the package and re-implement the model inline; they are kept as the record of the analyses behind the paper. Careful if migrating them: `SyntheticDataEstimation` applies the L2 penalty *inside* the double loop, so its penalty is multiplied by the number of rows/columns — it is not the same model as the package.
+`Usar_paquete.ipynb` (in-process use) and `Ejemplo_llamar_API_modelo.ipynb` (HTTP client) are worked examples. The other five (`DataFitting*`, `SyntheticDataEstimation*`, `Model_consistency`) predate the package and re-implement the model inline; they are kept as the record of the analyses behind the paper. Careful if migrating them: `SyntheticDataEstimation` applies the L2 penalty *inside* the double loop, so its penalty is multiplied by the number of rows/columns — it is not the same model as the package.
 
 ## Testing conventions
 

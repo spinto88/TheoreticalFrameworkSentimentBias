@@ -433,6 +433,6 @@ Tests that exercise `fit` mock the solver rather than optimising, so the suite s
 
 ## Notebooks
 
-- `Usar_service_directo.ipynb` — using the package directly, in-process.
+- **`Usar_paquete.ipynb`** — start here. Uses the package directly, in-process: loading data, fitting, generating synthetic data, verifying parameter recovery, and the `thin()` consistency curve.
 - `Ejemplo_llamar_API_modelo.ipynb` — calling the HTTP API from Python.
 - `DataFitting*.ipynb`, `SyntheticDataEstimation*.ipynb`, `Model_consistency.ipynb` — self-contained research notebooks that predate the package and re-implement the model inline.  They are kept as the record of the analyses behind the paper; new work should use the package instead.
