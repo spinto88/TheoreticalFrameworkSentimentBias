@@ -4,41 +4,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A FastAPI service that estimates latent sentiment bias in media coverage. Given mention counts broken down by (outlet, subject, sentiment polarity), it fits a latent-trait model relating outlet bias to subject sentiment via maximum penalised likelihood, and serves a static-HTML/Chart.js frontend for uploading data and visualising the fitted parameters.
+A Python package (`sentiment_bias`) that estimates latent sentiment bias in media coverage. Given mention counts broken down by (outlet, subject, sentiment polarity), it fits a latent-trait model relating outlet bias to subject sentiment by maximum penalised likelihood.
+
+It is **not** published to PyPI — collaborators clone the repo and `pip install -e .` into a virtualenv. The package is the primary interface; an optional FastAPI layer (`sentiment_bias.api`, behind the `api` extra) wraps it in HTTP and serves a static-HTML/Chart.js frontend.
 
 ## Commands
 
 ```bash
-# Install
-python -m venv env
-source env/bin/activate
-pip install -r requirements.txt
+# Install (editable; -e means src/ edits take effect with no reinstall)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[api,dev]"       # core + FastAPI + pytest; plain `pip install -e .` for core only
 
-# Run the server (foreground)
-uvicorn src.app:app --host 0.0.0.0 --port 8000
+# Run the server
+sentiment-bias-api                             # console script; SENTIMENT_BIAS_HOST / _PORT
+bash run.sh                                    # backgrounded, writes server.pid / server.log
+kill $(cat server.pid)                         # stop it
+uvicorn sentiment_bias.api.app:app --reload    # development
 
-# Run the server (background, via PID/log file — see run.sh)
-bash run.sh
-kill $(cat server.pid)   # stop it
-
-# Run all tests
-pytest tests/ -v
-
-# Run a single test file / test
-pytest tests/test_service.py -v
-pytest tests/test_service.py::TestRunAnalysis::test_output_outlet_count -v
-
-# Docker
-docker-compose up --build
+# Tests
+pytest
+pytest -m "not slow"                           # skip the end-to-end recovery test
+pytest tests/test_model.py::TestLogLikelihood -v
 ```
 
-There is no lint/format/typecheck tooling configured in this repo (no ruff/black/mypy config present).
+There is no lint/format/typecheck tooling configured (no ruff/black/mypy config present).
 
-The frontend (`src/static/`) is plain HTML/JS with no build step — edits take effect on page reload, served directly by FastAPI's `StaticFiles` mount at `/static` and `index.html` at `/`.
+The frontend (`src/sentiment_bias/api/static/`) is plain HTML/JS with no build step — edits take effect on page reload.
 
 ## Architecture
 
-### The model (`src/service.py`)
+The split is deliberate: the core is pure numpy/pandas so it can be used from a notebook without installing FastAPI, and `api/` is the only place Pydantic and FastAPI appear.
+
+### The model (`src/sentiment_bias/model.py`)
 
 The log-odds of a positive vs. negative mention for outlet *i* covering subject *j*, with *D* latent dimensions:
 
@@ -50,42 +48,32 @@ q_ij = dot(z[i], a[j]) + b[j]
 - `a[j]` — subject *j*'s discrimination vector, length D (couples with `z` dimension-wise)
 - `b[j]` — subject *j*'s scalar baseline sentiment, shared across all dimensions
 
-Setting `D=1` recovers the original scalar bias model; `D=2` is also supported (`n_dimensions` is validated to `[1, 2]` in `AnalysisInput`). Mention counts per (outlet, subject) follow a 3-category multinomial (negative/neutral/positive) parameterised by `q_ij`.
+Mention counts per (outlet, subject) follow a 3-category multinomial (negative/neutral/positive) parameterised by `q_ij`. `D=1` recovers the original scalar model; `n_dimensions` is validated to `[1, 2]` in `AnalysisInput` (the HTTP boundary only — `fit` itself accepts any D ≥ 1).
 
-Parameters are estimated by maximising a Gaussian-(L2)-penalised log-likelihood with **SciPy's `minimize` using L-BFGS-B and an analytical gradient** (`grad_negative_log_likelihood`) — not `differential_evolution` (README describes an earlier version of the model). All parameters are box-constrained to `[-5, 5]`.
+This module is pure NumPy, with no pandas, Pydantic or I/O: it is the only file that must be read to verify the mathematics. It holds `log_likelihood` / `negative_log_likelihood` / `grad_negative_log_likelihood` (objective and analytical gradient over the flat parameter vector `x`, laid out as `[z (m*D), a (k*D), b (k)]`), `pack`/`unpack`/`log_odds` (parameter algebra), `bic`, and `canonicalize_1d`.
 
-Key functions, all in `src/service.py`:
-- `build_tensor` — flat `Mention` list → dense `(m, k, 3)` count tensor + sorted outlet/subject name lists (sorting determines index order used everywhere downstream)
-- `log_likelihood` / `negative_log_likelihood` / `grad_negative_log_likelihood` — objective and gradient over a single flat parameter vector `x`, laid out as `[z (m*D), a (k*D), b (k)]`
-- `aproximate_bayesian_information_criteria` — BIC computed from the fitted negative log-likelihood, used as a model-selection metric alongside raw loss (lower is better for both); it's an approximation since it treats the L2 penalty's effect on the log-posterior as negligible
-- `run_analysis` — orchestrates build_tensor → minimize → BIC → `build_output`; this is what both API endpoints call into
-- `generate_data` / `generate_mentions` — the inverse direction: given known `z`/`a`/`b`, sample synthetic mention counts from the generative model (used for validation/testing and by the "generate synthetic data" notebooks)
+`bic` is an approximation: it treats the L2 penalty's effect on the log-posterior as negligible. Lower is better, as for raw loss.
 
-### API (`src/app.py`)
+### The rest of the core
 
-Two POST endpoints, thin wrappers around `service.py`:
-- `POST /analyze` — `AnalysisInput` (mentions + `n_dimensions`) → `AnalysisOutput` (`z` per outlet, `a`+`b` per subject, `loss`, `bic`)
-- `POST /generate` — `GenerateInput` (known `z`/`a`/`b` + `amount_of_mentions`) → `AnalysisInput` of synthetic mentions, sampled from the generative model — useful for round-trip testing (generate synthetic data with known ground-truth parameters, then run `/analyze` and check recovery)
+- `data.py` — `MentionTensor` (a frozen dataclass wrapping an `(m, k, 3)` int array plus sorted outlet/subject name lists; **the sorting determines index order everywhere downstream**), the `from_wide` / `from_long` / `from_records` / `from_array` constructors, the `to_tensor` dispatcher, and `read_csv` / `read_json`. This is the only module that knows about DataFrame column names. Duplicate `(outlet, subject, mention_type)` rows are summed; missing pairs become zeros.
+- `results.py` — `BiasFit`, the frozen dataclass returned by `fit`. `z` and `a` are DataFrames indexed by name with one column per dimension (`dim_1`, …); `b` is a Series, not a frame, since there is genuinely one scalar per subject. Also carries `losses` (one per restart, which reveals a multimodal objective), `converged`, `data` (the fitted tensor) and `x`.
+- `estimate.py` — `fit`, which orchestrates `to_tensor` → `minimize` (L-BFGS-B with analytical gradient, box constraints `[-5, 5]`) over `n_restarts` random initialisations → `canonicalize_1d` when `n_dimensions == 1` → `bic` → `BiasFit`. Takes `seed` so restarts are reproducible.
+- `simulate.py` — the generative direction, as first-class as `fit`: `simulate(z, a, b, ...)` samples counts from known parameters, and `thin(tensor, fraction)` subsamples a tensor to a fraction of its mentions via a multivariate hypergeometric. `n_mentions` accepts a fixed `int`, `"poisson"` (with `mean_mentions`), or an explicit `(m, k)` array.
 
-`GET /` serves `src/static/index.html`; `/static/*` serves the rest of the frontend.
+### API (`src/sentiment_bias/api/`)
 
-### Schemas (`src/schemas.py`)
-
-Pydantic models shared by both endpoints. Note `z` and `a` are always `List[float]` (length D) even when D=1 — the frontend and any client code must index into these vectors rather than treat them as scalars.
-
-### Frontend (`src/static/`)
-
-No build step; self-contained SPA:
-- `main.js` — upload/drag-drop, client-side CSV→JSON conversion (backend only ever receives JSON), API calls
-- `charts.js` — Chart.js bar charts, one per parameter family (z, a, b)
-- `utils.js` — CSV parsing, PNG/SVG chart export
+- `app.py` — two POST routes, each three lines: `adapters` → `fit`/`simulate` → `adapters`. `POST /analyze` takes `AnalysisInput` → `AnalysisOutput`; `POST /generate` takes `GenerateInput` → `AnalysisInput` of synthetic mentions (useful for round-trip testing). `GET /` serves the frontend. Static paths resolve against `STATIC_DIR = Path(__file__).resolve().parent / "static"`, so the server works from any cwd.
+- `schemas.py` — the Pydantic models. Note `z` and `a` are always `List[float]` (length D) even when D=1, so clients must index into these vectors rather than treat them as scalars.
+- `adapters.py` — every conversion between the wire format and the core's numpy/pandas types. Keeping these here is what lets the core stay Pydantic-free.
 
 ### Notebooks (`notebooks/`)
 
-Exploratory/example usage (data fitting via gradient descent, synthetic data estimation, calling the API directly, model-consistency checks). Not part of the runtime path; useful as worked examples of calling into `src/service.py` or the HTTP API directly.
+`Usar_service_directo.ipynb` (in-process use) and `Ejemplo_llamar_API_modelo.ipynb` (HTTP client) are worked examples. The other five (`DataFitting*`, `SyntheticDataEstimation*`, `Model_consistency`) predate the package and re-implement the model inline; they are kept as the record of the analyses behind the paper. Careful if migrating them: `SyntheticDataEstimation` applies the L2 penalty *inside* the double loop, so its penalty is multiplied by the number of rows/columns — it is not the same model as the package.
 
 ## Testing conventions
 
-- `conftest.py` puts the repo root on `sys.path` so `src` is importable regardless of invocation directory — always run pytest from the repo root or rely on this.
-- Tests that exercise `run_analysis` mock `src.service.minimize` (`unittest.mock.patch`) rather than actually optimising, so the suite stays fast and deterministic (see `tests/test_service.py::TestRunAnalysis`).
-- Test files mirror `src/` 1:1: `test_service.py` (model/math), `test_schemas.py` (Pydantic validation), `test_app.py` (HTTP endpoints via `TestClient`).
+- Test files mirror the source layout: `test_model.py`, `test_data.py`, `test_results.py`, `test_estimate.py`, `test_simulate.py`, and `tests/api/` for the HTTP layer.
+- Tests that exercise `fit` mock `sentiment_bias.estimate.minimize` rather than actually optimising, so the suite stays fast and deterministic. For this to keep working, `estimate.py` must keep importing `minimize` at module level, and `api/app.py` must keep importing `fit`/`simulate` at module level and calling them by bare name.
+- The one end-to-end test that really runs the optimiser is marked `slow`.
+- pytest runs with `--import-mode=importlib` (set in `pyproject.toml`), so there is no `tests/__init__.py` and no root `conftest.py` — the package resolves through the editable install, from any cwd. If imports only work from the repo root, the install is broken.
