@@ -1,13 +1,23 @@
 # Sentiment Bias
 
-A Python package for estimating latent sentiment bias in media coverage.  Given a dataset of mention counts broken down by outlet, subject, and sentiment polarity, the model infers a set of parameters that explain how each outlet's editorial slant interacts with each subject's intrinsic reception.
+A Python package for estimating latent sentiment bias in media coverage.  Given a dataset of
+mention counts broken down by outlet, subject, and sentiment polarity, the model infers a set of
+parameters that explain how each outlet's editorial slant interacts with each subject's intrinsic
+reception.
 
-It can be used in two independent ways, and you only need to set up the one you want:
+There are **two independent ways to use this**, and you only need to set up the one you want:
 
-- **As a library** — `import sentiment_bias as sb` from any notebook or script. Nothing runs in the background, no localhost, no web dependencies. This is all most people need; see [As a library](#as-a-library-no-localhost-no-server).
-- **As an HTTP service** — an optional FastAPI server with a browser frontend, for running the model without writing code, and for sharing it with people who don't use Python. See [Run the API](#run-the-api) and [Deploy on a server](#deploy-on-a-server).
+|  | What you install | What you get |
+|---|---|---|
+| **[The Python package](#using-the-python-package)** | `pip install -e .` | `import sentiment_bias` from any notebook or script. numpy, scipy and pandas only — nothing runs in the background, no localhost, no web stack. **This is all most people need.** |
+| **[The web service](#running-the-web-service)** | `pip install -e ".[api]"` | A FastAPI server with a browser interface, for running the model without writing Python and for sharing it with people who don't. |
 
-The HTTP layer is built on top of the library, so the model behaves identically either way.
+The service is built on top of the package, so the model behaves identically either way.  The
+sections below are self-contained: each starts with its own install step, and you can skip the
+other one entirely.
+
+Requires Python 3.10 or newer.  The package is **not** on PyPI — you install it from a clone of
+this repository.
 
 ---
 
@@ -84,175 +94,6 @@ What **is** identified in `D > 1`: the eigenvalues of `zᵀz`, the subspace `z` 
 
 ---
 
-## Installation
-
-The package is **not** on PyPI.  You install it from a clone of this repository, into a virtual environment.  Requires Python 3.10 or newer.
-
-Pick the path that matches what you want to do:
-
-| You want to… | Install | Then |
-|---|---|---|
-| Run the model from your own notebooks or scripts, no server involved | `pip install -e .` | [Use as a library](#use-as-a-library) |
-| Serve the web interface to other people | `pip install -e ".[api]"` | [Deploy on a server](#deploy-on-a-server) |
-| Work on this codebase | `pip install -e ".[api,dev,nb]"` | [Tests](#tests) |
-
-### As a library (no localhost, no server)
-
-This is all you need if you just want to fit the model in Python.  It installs **only** numpy, scipy and pandas — no FastAPI, no web stack:
-
-```bash
-git clone <repository-url>
-cd TheoreticalFrameworkSentimentBias
-
-python3 -m venv .venv
-source .venv/bin/activate
-
-pip install -e .
-```
-
-That's it.  Verify it worked from a directory *outside* the repository — if this prints a version, the install is good and nothing depends on your working directory:
-
-```bash
-cd ~ && python -c "import sentiment_bias as sb; print(sb.__version__)"
-```
-
-Now use it from any notebook or script, with no `sys.path` juggling and nothing running in the background:
-
-```python
-import sentiment_bias as sb
-
-fit = sb.fit(sb.read_csv("mentions.csv"))
-```
-
-If your notebook runs on a different kernel than this virtual environment, register it once:
-
-```bash
-pip install ipykernel
-python -m ipykernel install --user --name sentiment-bias
-```
-
-### Extras
-
-```bash
-pip install -e ".[api]"          # + FastAPI server and frontend
-pip install -e ".[dev]"          # + pytest, httpx
-pip install -e ".[nb]"           # + jupyter, matplotlib, requests
-pip install -e ".[api,dev,nb]"   # everything
-```
-
-### What `-e` means
-
-`-e` installs in *editable* mode: the virtual environment points at `src/` in your clone rather than copying it, so your edits take effect on the next Python start with no reinstall.  Frontend edits need nothing but a page reload.
-
-Reinstall (`pip install -e .` again) only when you change `pyproject.toml` — for example after adding a dependency, or to pick up a new console script.
-
-### Upgrading an existing clone
-
-```bash
-git pull
-source .venv/bin/activate
-pip install -e ".[api]"    # only needed if pyproject.toml changed
-```
-
-If you have an older clone from before the package restructure, its virtual environment (often `env/`) predates the new layout and will not work.  Create a fresh one as above; you can delete the old directory.
-
----
-
-## Use as a library
-
-### Fitting your own data
-
-```python
-import sentiment_bias as sb
-
-tensor = sb.read_csv("data/input.csv")      # or read_json(...), or a DataFrame
-fit = sb.fit(tensor, n_dimensions=1, n_restarts=10, seed=0)
-
-fit.z            # outlet bias, DataFrame indexed by outlet, one column per dimension
-fit.subjects     # a and b, DataFrame indexed by subject
-fit.loss, fit.bic
-print(fit.summary())
-```
-
-`fit` accepts anything `to_tensor` understands: a `MentionTensor`, a wide or long DataFrame, a raw `(m, k, 3)` array, or a list of mention records.
-
-### Generating synthetic data
-
-The generative direction is a first-class part of the package — simulate with known parameters, fit, and check how well they are recovered:
-
-```python
-import numpy as np, sentiment_bias as sb
-from scipy.stats import spearmanr
-
-z = np.linspace(-2, 2, 50)        # 50 outlets
-a = np.linspace(-1, 1, 6)         # 6 subjects
-b = np.random.default_rng(0).normal(0, 0.05, 6)
-
-tensor = sb.simulate(z, a, b, n_mentions="poisson", mean_mentions=100, seed=123457)
-fit = sb.fit(tensor, n_dimensions=1, n_restarts=5, seed=1)
-
-abs(spearmanr(z, fit.z["dim_1"]).statistic)    # ≈ 0.99
-```
-
-`n_mentions` takes three forms:
-
-| Value | Meaning |
-|---|---|
-| `int` (default `100`) | the same number of mentions for every pair |
-| `"poisson"` with `mean_mentions=μ` | `N_ij ~ Poisson(μ)`, drawn independently per pair |
-| array of shape `(m, k)` | an explicit count for each pair |
-
-`thin(tensor, fraction)` subsamples a tensor down to a fraction of its total mentions, drawing without replacement — useful for measuring how the fit degrades as data thins out.
-
-### Public API
-
-| Name | Purpose |
-|---|---|
-| `fit` | Estimate parameters from mention counts |
-| `simulate`, `thin` | Draw synthetic counts; subsample counts |
-| `BiasFit` | Fitted parameters and diagnostics |
-| `MentionTensor` | The `(m, k, 3)` count container |
-| `to_tensor`, `from_wide`, `from_long`, `from_records`, `from_array` | Build a tensor from any input shape |
-| `read_csv`, `read_json` | Load counts from disk |
-| `model` | The raw likelihood, gradient, BIC and canonicalization functions |
-
-### Comparing two fits
-
-Comparing periods, or any two separate fits, needs care: the canonical gauge is computed from whichever outlets are in the sample, so it moves when the sample does.
-
-**Rankings survive. Magnitudes do not.** In a controlled check — the same 20 outlets with *identical* true `z` in both fits, the second one simply also containing 10 new, more extreme outlets:
-
-| | |
-|---|---|
-| Spearman correlation of `z` between fits | **1.0000** |
-| regression slope `z₂ ~ z₁` | **0.456** |
-
-Nothing about the shared outlets changed, yet their `z` values halved, purely because `sum(z) = 0` and `sum(z²) = 1` are computed over the outlets present. A headline like "this outlet moved toward the centre" can be pure composition effect.
-
-**For anything across fits, use `log_odds()`.** `q_ij = z_i·a_j + b_j` is gauge-invariant, and in the same check it came out essentially untouched:
-
-| | |
-|---|---|
-| correlation of `q` between the two fits | **0.999999** |
-| regression slope `q₂ ~ q₁` | **0.989** |
-| mean absolute error vs. the true `q` | **0.055** and **0.055** |
-
-```python
-fit_2016.log_odds()      # (outlets × subjects), comparable across fits
-```
-
-And conveniently, *"is this outlet more favourable to this candidate?"* **is** `q_ij` — the question you most likely want to ask is answered by the quantity that needs no anchoring.
-
-| Question | Use | Comparable across fits? |
-|---|---|---|
-| Which outlets lean furthest, within this dataset? | `fit.z` ranking | ranking yes, values no |
-| Is outlet *i* favourable to subject *j*? | `fit.log_odds()` | yes |
-| Did overall polarisation change? | neither — see below | no |
-
-Dispersion is the one thing this gauge cannot carry: `sum(z²) = 1` by construction, so the fitted spread is identical no matter how polarised the period truly was (verified: true `sd(z)` of 0.298 and 1.791 both give fitted `sd(z) = 0.1826`). The information is not lost, it moves into `a`. To measure polarisation change you need either a gauge-invariant functional of `q`, or to fix the scale externally by holding some subjects' `(a, b)` fixed across fits — standard anchor-item linking, not currently implemented here.
-
----
-
 ## Data formats
 
 A mention record says how many times a given outlet mentioned a given subject with a given sentiment polarity.
@@ -301,9 +142,182 @@ FoxNews,Economy,9,0,0
 
 ---
 
-## Run the API
+# Using the Python package
 
-You only need this if you want the web interface.  Requires the `api` extra, and the virtual environment must be **activated** — `run.sh` calls the `sentiment-bias-api` console script, which lives inside it.
+## Install
+
+Nothing else needs to be running.  This installs the model and its three dependencies — numpy,
+scipy and pandas — and no web stack at all:
+
+```bash
+git clone <repository-url>
+cd TheoreticalFrameworkSentimentBias
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install -e .
+```
+
+Verify it from a directory *outside* the repository.  If this prints a version, the install is
+good and nothing depends on your working directory:
+
+```bash
+cd ~ && python -c "import sentiment_bias as sb; print(sb.__version__)"
+```
+
+Now use it from any notebook or script, with no `sys.path` juggling:
+
+```python
+import sentiment_bias as sb
+
+fit = sb.fit(sb.read_csv("mentions.csv"))
+```
+
+If your notebook runs on a different kernel than this virtual environment, register it once:
+
+```bash
+pip install ipykernel
+python -m ipykernel install --user --name sentiment-bias
+```
+
+**What `-e` means.** `-e` installs in *editable* mode: the virtual environment points at `src/` in
+your clone rather than copying it, so your edits take effect the next time Python starts, with no
+reinstall.  You only need to reinstall when `pyproject.toml` itself changes — after adding a
+dependency, say.
+
+**Upgrading a clone you already have:**
+
+```bash
+git pull
+source .venv/bin/activate
+pip install -e .           # only needed if pyproject.toml changed
+```
+
+If you have an older clone from before the package restructure, its virtual environment (often
+`env/`) predates the new layout and will not work.  Create a fresh one as above; the old directory
+can be deleted.
+
+## Fitting your own data
+
+```python
+import sentiment_bias as sb
+
+tensor = sb.read_csv("data/input.csv")      # or read_json(...), or a DataFrame
+fit = sb.fit(tensor, n_dimensions=1, n_restarts=10, seed=0)
+
+fit.z            # outlet bias, DataFrame indexed by outlet, one column per dimension
+fit.subjects     # a and b, DataFrame indexed by subject
+fit.loss, fit.bic
+print(fit.summary())
+```
+
+`fit` accepts anything `to_tensor` understands: a `MentionTensor`, a wide or long DataFrame, a raw `(m, k, 3)` array, or a list of mention records.
+
+## Generating synthetic data
+
+The generative direction is a first-class part of the package — simulate with known parameters, fit, and check how well they are recovered:
+
+```python
+import numpy as np, sentiment_bias as sb
+from scipy.stats import spearmanr
+
+z = np.linspace(-2, 2, 50)        # 50 outlets
+a = np.linspace(-1, 1, 6)         # 6 subjects
+b = np.random.default_rng(0).normal(0, 0.05, 6)
+
+tensor = sb.simulate(z, a, b, n_mentions="poisson", mean_mentions=100, seed=123457)
+fit = sb.fit(tensor, n_dimensions=1, n_restarts=5, seed=1)
+
+abs(spearmanr(z, fit.z["dim_1"]).statistic)    # ≈ 0.99
+```
+
+`n_mentions` takes three forms:
+
+| Value | Meaning |
+|---|---|
+| `int` (default `100`) | the same number of mentions for every pair |
+| `"poisson"` with `mean_mentions=μ` | `N_ij ~ Poisson(μ)`, drawn independently per pair |
+| array of shape `(m, k)` | an explicit count for each pair |
+
+`thin(tensor, fraction)` subsamples a tensor down to a fraction of its total mentions, drawing without replacement — useful for measuring how the fit degrades as data thins out.
+
+## Comparing two fits
+
+Comparing periods, or any two separate fits, needs care: the canonical gauge is computed from whichever outlets are in the sample, so it moves when the sample does.
+
+**Rankings survive. Magnitudes do not.** In a controlled check — the same 20 outlets with *identical* true `z` in both fits, the second one simply also containing 10 new, more extreme outlets:
+
+| | |
+|---|---|
+| Spearman correlation of `z` between fits | **1.0000** |
+| regression slope `z₂ ~ z₁` | **0.456** |
+
+Nothing about the shared outlets changed, yet their `z` values halved, purely because `sum(z) = 0` and `sum(z²) = 1` are computed over the outlets present. A headline like "this outlet moved toward the centre" can be pure composition effect.
+
+**For anything across fits, use `log_odds()`.** `q_ij = z_i·a_j + b_j` is gauge-invariant, and in the same check it came out essentially untouched:
+
+| | |
+|---|---|
+| correlation of `q` between the two fits | **0.999999** |
+| regression slope `q₂ ~ q₁` | **0.989** |
+| mean absolute error vs. the true `q` | **0.055** and **0.055** |
+
+```python
+fit_2016.log_odds()      # (outlets × subjects), comparable across fits
+```
+
+And conveniently, *"is this outlet more favourable to this candidate?"* **is** `q_ij` — the question you most likely want to ask is answered by the quantity that needs no anchoring.
+
+| Question | Use | Comparable across fits? |
+|---|---|---|
+| Which outlets lean furthest, within this dataset? | `fit.z` ranking | ranking yes, values no |
+| Is outlet *i* favourable to subject *j*? | `fit.log_odds()` | yes |
+| Did overall polarisation change? | neither — see below | no |
+
+Dispersion is the one thing this gauge cannot carry: `sum(z²) = 1` by construction, so the fitted spread is identical no matter how polarised the period truly was (verified: true `sd(z)` of 0.298 and 1.791 both give fitted `sd(z) = 0.1826`). The information is not lost, it moves into `a`. To measure polarisation change you need either a gauge-invariant functional of `q`, or to fix the scale externally by holding some subjects' `(a, b)` fixed across fits — standard anchor-item linking, not currently implemented here.
+
+## Public API
+
+| Name | Purpose |
+|---|---|
+| `fit` | Estimate parameters from mention counts |
+| `simulate`, `thin` | Draw synthetic counts; subsample counts |
+| `BiasFit` | Fitted parameters and diagnostics |
+| `MentionTensor` | The `(m, k, 3)` count container |
+| `to_tensor`, `from_wide`, `from_long`, `from_records`, `from_array` | Build a tensor from any input shape |
+| `read_csv`, `read_json` | Load counts from disk |
+| `model` | The raw likelihood, gradient, BIC and canonicalization functions |
+
+---
+
+# Running the web service
+
+Everything from here down is optional.  Skip it if you only want the package.
+
+## Install
+
+The `api` extra adds FastAPI and uvicorn **on top of** the package, so this one install gives you
+both — you do not need to install the package separately first:
+
+```bash
+git clone <repository-url>
+cd TheoreticalFrameworkSentimentBias
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install -e ".[api]"
+```
+
+If you already have a plain `pip install -e .` environment, just re-run it with the extra; pip
+adds the missing pieces in place.  Editable mode applies here too, and the frontend needs even
+less — its files are served straight from `src/`, so a page reload picks up any edit.
+
+## Start the server
+
+The virtual environment must be **activated**: `run.sh` calls the `sentiment-bias-api` console
+script, which lives inside it and is not on your `PATH` otherwise.
 
 ```bash
 source .venv/bin/activate
@@ -323,7 +337,64 @@ SENTIMENT_BIAS_HOST=127.0.0.1 SENTIMENT_BIAS_PORT=9000 sentiment-bias-api
 
 Note the default binds to **all** interfaces, so the server is reachable from other machines as soon as the port is open.  Use `127.0.0.1` to keep it local.
 
----
+## API reference
+
+### `POST /analyze`
+
+Runs the model on mention data.  Request body (`AnalysisInput`):
+
+```json
+{
+  "data": [ ... mention records ... ],
+  "n_dimensions": 1,
+  "n_restarts": 1,
+  "sign_reference_outlet": null,
+  "sign_reference_positive": true
+}
+```
+
+Response (`AnalysisOutput`):
+
+```json
+{
+  "outlets": [ { "outlet": "Reuters", "z": [1.52] } ],
+  "subjects": [ { "subject": "Economy", "a": [0.94], "b": 0.31 } ],
+  "loss": 26.27,
+  "bic": 78.70,
+  "n_restarts": 1
+}
+```
+
+`sign_reference_outlet` is only valid when `n_dimensions` is 1, and must name an outlet present in the data.
+
+### `POST /generate`
+
+Samples synthetic mention data from known parameters, and returns it as an `AnalysisInput` ready to feed back into `/analyze`.  Request body (`GenerateInput`):
+
+```json
+{
+  "outlets": [ { "outlet": "A", "z": [1.0] } ],
+  "subjects": [ { "subject": "X", "a": [0.8], "b": 0.1 } ],
+  "amount_of_mentions": 100,
+  "poisson": false
+}
+```
+
+With `"poisson": true`, `amount_of_mentions` is read as the Poisson mean rather than an exact per-pair count.
+
+### `GET /`
+
+Serves the frontend.
+
+Interactive API documentation is at `http://localhost:8000/docs` while the server is running.
+
+## The browser frontend
+
+A self-contained single-page application with no build step, bundled with the package under `sentiment_bias/api/static/`.
+
+- **Input**: drag & drop or click-to-upload accepting `.json` and `.csv`.  CSV is parsed client-side and converted to JSON before being sent, so the backend always receives JSON.
+- **Charts**: three bar charts rendered with [Chart.js](https://www.chartjs.org/), one per parameter family (*z*, *a*, *b*).
+- **Export**: each chart downloads as a high-resolution PNG or as a true vector SVG.
 
 ## Deploy on a server
 
@@ -395,66 +466,18 @@ sudo -u sentiment-bias .venv/bin/pip install -e ".[api]"   # only if pyproject.t
 sudo systemctl restart sentiment-bias
 ```
 
-### `POST /analyze`
-
-Runs the model on mention data.  Request body (`AnalysisInput`):
-
-```json
-{
-  "data": [ ... mention records ... ],
-  "n_dimensions": 1,
-  "n_restarts": 1,
-  "sign_reference_outlet": null,
-  "sign_reference_positive": true
-}
-```
-
-Response (`AnalysisOutput`):
-
-```json
-{
-  "outlets": [ { "outlet": "Reuters", "z": [1.52] } ],
-  "subjects": [ { "subject": "Economy", "a": [0.94], "b": 0.31 } ],
-  "loss": 26.27,
-  "bic": 78.70,
-  "n_restarts": 1
-}
-```
-
-`sign_reference_outlet` is only valid when `n_dimensions` is 1, and must name an outlet present in the data.
-
-### `POST /generate`
-
-Samples synthetic mention data from known parameters, and returns it as an `AnalysisInput` ready to feed back into `/analyze`.  Request body (`GenerateInput`):
-
-```json
-{
-  "outlets": [ { "outlet": "A", "z": [1.0] } ],
-  "subjects": [ { "subject": "X", "a": [0.8], "b": 0.1 } ],
-  "amount_of_mentions": 100,
-  "poisson": false
-}
-```
-
-With `"poisson": true`, `amount_of_mentions` is read as the Poisson mean rather than an exact per-pair count.
-
-### `GET /`
-
-Serves the frontend.
-
-Interactive API documentation is at `http://localhost:8000/docs` while the server is running.
-
 ---
 
-## Frontend
+# Development
 
-A self-contained single-page application with no build step, bundled with the package under `sentiment_bias/api/static/`.
+## Install
 
-- **Input**: drag & drop or click-to-upload accepting `.json` and `.csv`.  CSV is parsed client-side and converted to JSON before being sent, so the backend always receives JSON.
-- **Charts**: three bar charts rendered with [Chart.js](https://www.chartjs.org/), one per parameter family (*z*, *a*, *b*).
-- **Export**: each chart downloads as a high-resolution PNG or as a true vector SVG.
+```bash
+pip install -e ".[api,dev,nb]"   # package + service + pytest + notebook tooling
+```
 
----
+The extras are `api` (FastAPI, uvicorn, pydantic), `dev` (pytest, httpx) and `nb` (jupyter,
+matplotlib, requests); combine whichever you need.
 
 ## Tests
 
@@ -464,8 +487,6 @@ pytest
 ```
 
 Tests that exercise `fit` mock the solver rather than optimising, so the suite stays fast and deterministic.  The end-to-end recovery test that does run the optimiser is marked `slow`; skip it with `pytest -m "not slow"`.
-
----
 
 ## Project structure
 
@@ -491,8 +512,6 @@ Tests that exercise `fit` mock the solver rather than optimising, so the suite s
 ├── tests/
 └── notebooks/
 ```
-
----
 
 ## Notebooks
 
