@@ -25,7 +25,8 @@ client = TestClient(app)
 # Shared fixtures / helpers
 # ---------------------------------------------------------------------------
 
-def make_fit(z, a, b, outlets, subjects, *, loss=12.34, bic=20.5, n_restarts=1) -> BiasFit:
+def make_fit(z, a, b, outlets, subjects, *, loss=12.34, bic=20.5, n_restarts=1,
+             log_likelihood=None) -> BiasFit:
     """Build a BiasFit the way fit() would, for use as a mock return value."""
     n_dimensions = z.shape[1]
     columns = dimension_columns(n_dimensions)
@@ -35,6 +36,7 @@ def make_fit(z, a, b, outlets, subjects, *, loss=12.34, bic=20.5, n_restarts=1) 
         a=pd.DataFrame(a, index=pd.Index(subjects, name="subject"), columns=columns),
         b=pd.Series(b, index=pd.Index(subjects, name="subject"), name="b"),
         loss=loss,
+        log_likelihood=-loss if log_likelihood is None else log_likelihood,
         bic=bic,
         n_dimensions=n_dimensions,
         n_restarts=n_restarts,

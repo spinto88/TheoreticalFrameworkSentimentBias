@@ -33,7 +33,8 @@ def mention(outlet: str, subject: str, mention_type: str, n: int) -> Mention:
     )
 
 
-def make_fit(z, a, b, outlets, subjects, *, loss=1.5, bic=7.5, n_restarts=1) -> BiasFit:
+def make_fit(z, a, b, outlets, subjects, *, loss=1.5, bic=7.5, n_restarts=1,
+             log_likelihood=None) -> BiasFit:
     n_dimensions = z.shape[1]
     columns = dimension_columns(n_dimensions)
     counts = np.zeros((len(outlets), len(subjects), 3), dtype=np.int64)
@@ -42,6 +43,7 @@ def make_fit(z, a, b, outlets, subjects, *, loss=1.5, bic=7.5, n_restarts=1) -> 
         a=pd.DataFrame(a, index=pd.Index(subjects, name="subject"), columns=columns),
         b=pd.Series(b, index=pd.Index(subjects, name="subject"), name="b"),
         loss=loss,
+        log_likelihood=-loss if log_likelihood is None else log_likelihood,
         bic=bic,
         n_dimensions=n_dimensions,
         n_restarts=n_restarts,

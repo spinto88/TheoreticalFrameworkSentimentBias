@@ -28,8 +28,15 @@ class BiasFit:
             same columns as ``z``.
         b: Subject baseline sentiment, indexed by subject name. A Series,
             not a frame: there is genuinely one scalar per subject.
-        loss: Minimised negative penalised log-likelihood (lower is better).
-        bic: Approximate Bayesian Information Criterion (lower is better).
+        loss: Minimised negative penalised log-likelihood, evaluated at the
+            optimiser's solution — which is *not* the canonicalized point
+            reported here, since canonicalization changes the penalty term.
+        log_likelihood: Unpenalised log-likelihood. Unlike ``loss`` this
+            depends on the parameters only through ``q``, so it is
+            invariant under canonicalization and is the number that can be
+            recomputed from the ``z``/``a``/``b`` reported here.
+        bic: Approximate Bayesian Information Criterion (lower is better),
+            computed from ``loss``.
         n_dimensions: Number of latent dimensions D that were fitted.
         n_restarts: Number of independent optimisation restarts that were run.
         converged: Whether the best restart reported success.
@@ -43,6 +50,7 @@ class BiasFit:
     a: pd.DataFrame
     b: pd.Series
     loss: float
+    log_likelihood: float
     bic: float
     n_dimensions: int
     n_restarts: int

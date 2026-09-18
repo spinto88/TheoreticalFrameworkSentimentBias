@@ -35,9 +35,9 @@ def fit(
     1`` the optimisation runs that many times from independent starting
     points and the restart with the lowest loss is kept.
 
-    When ``n_dimensions == 1`` the fitted parameters are canonicalized (see
-    :func:`sentiment_bias.model.canonicalize_1d`), since the 1-D model is
-    only identified up to an affine reparametrization of ``z``.
+    The fitted parameters are canonicalized (see
+    :func:`sentiment_bias.model.canonicalize`), since the model is only
+    identified up to an affine reparametrization of ``z``.
 
     Args:
         data: Mention counts in any form accepted by
@@ -45,11 +45,12 @@ def fit(
             long DataFrame, an ``(m, k, 3)`` array, or mention records.
         n_dimensions: Number of latent dimensions D to fit.
         n_restarts: Number of independent optimisation restarts.
-        sign_reference_outlet: When ``n_dimensions == 1``, the outlet whose
-            canonicalized ``z`` sign is pinned by ``sign_reference_positive``.
-            Defaults to the first outlet alphabetically.
-        sign_reference_positive: Whether the reference outlet's ``z`` should
-            come out positive (default) or negative.
+        sign_reference_outlet: The outlet whose sign on dimension 1 is
+            pinned by ``sign_reference_positive``. Defaults to the first
+            outlet alphabetically. The remaining dimensions fix their own
+            signs (see :func:`sentiment_bias.model.canonicalize`).
+        sign_reference_positive: Whether the reference outlet's first
+            component should come out positive (default) or negative.
         bounds: Lower and upper box constraint applied to every parameter.
         tol: Convergence tolerance handed to the solver.
         seed: Seed or generator for the restart initialisations, making the
@@ -91,18 +92,18 @@ def fit(
 
     z, a, b = model.unpack(best.x, m, k, n_dimensions)
 
-    if n_dimensions == 1:
-        index = (
-            tensor.outlets.index(sign_reference_outlet)
-            if sign_reference_outlet is not None
-            else 0
-        )
-        z, a, b = model.canonicalize_1d(
-            z, a, b,
-            sign_reference_idx=index,
-            sign_reference_positive=sign_reference_positive,
-        )
+    index = (
+        tensor.outlets.index(sign_reference_outlet)
+        if sign_reference_outlet is not None
+        else 0
+    )
+    z, a, b = model.canonicalize(
+        z, a, b,
+        sign_reference_idx=index,
+        sign_reference_positive=sign_reference_positive,
+    )
 
+    x = model.pack(z, a, b)
     loss = float(best.fun)
     columns = dimension_columns(n_dimensions)
     return BiasFit(
@@ -110,11 +111,12 @@ def fit(
         a=pd.DataFrame(a, index=pd.Index(tensor.subjects, name="subject"), columns=columns),
         b=pd.Series(b, index=pd.Index(tensor.subjects, name="subject"), name="b"),
         loss=loss,
+        log_likelihood=model.log_likelihood(x, counts, n_dimensions, penalized=False),
         bic=float(model.bic(loss, n_parameters, tensor.n_mentions)),
         n_dimensions=n_dimensions,
         n_restarts=n_restarts,
         converged=bool(best.success),
         losses=losses,
         data=tensor,
-        x=model.pack(z, a, b),
+        x=x,
     )

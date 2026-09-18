@@ -345,29 +345,65 @@ class TestCanonicalization:
         assert z["A"] < 0
 
     @patch("sentiment_bias.estimate.minimize")
-    def test_two_dimensions_not_canonicalized(self, mock_min):
-        """n_dimensions=2 output is returned as-is, without standardization."""
-        data = [record(o, "X", "positive", 1) for o in ["A", "B"]]
-        # x = [z_A(2), z_B(2), a_X(2), b_X]
+    def test_two_dimensions_are_canonicalized(self, mock_min):
+        """n_dimensions=2 gets the same treatment as 1D: zero sum, unit norm, principal axes."""
+        data = [record(o, "X", "positive", 1) for o in ["A", "B", "C"]]
         mock_min.return_value = solution(
-            2, 1, n_dimensions=2, x=np.array([0.0, 1.0, 3.0, -2.0, 0.5, 0.1, 0.2])
+            3, 1, n_dimensions=2,
+            x=np.array([0.0, 1.0, 3.0, -2.0, 1.5, 0.4, 0.5, 0.1, 0.2]),
         )
-        z = fit(data, n_dimensions=2).z
-        np.testing.assert_allclose(z.loc["A"].to_numpy(), [0.0, 1.0])
-        np.testing.assert_allclose(z.loc["B"].to_numpy(), [3.0, -2.0])
+        z = fit(data, n_dimensions=2).z.to_numpy()
+        np.testing.assert_allclose(z.sum(axis=0), [0.0, 0.0], atol=1e-12)
+        assert (z ** 2).sum() == pytest.approx(1.0)
+        gram = z.T @ z
+        assert abs(gram[0, 1]) == pytest.approx(0.0, abs=1e-12)
+        assert gram[0, 0] >= gram[1, 1]
 
     @patch("sentiment_bias.estimate.minimize")
-    def test_parameters_within_bounds_2d(self, mock_min):
-        """n_dimensions=2 skips 1D canonicalization, so the raw box bounds still hold."""
+    def test_canonicalization_frees_a_from_the_box_bounds_2d(self, mock_min):
+        """Canonicalization runs after the fit, so only z stays bounded.
+
+        Forcing sum(z**2) = 1 shrinks z and pushes the same scale into a, which
+        can then exceed the [-5, 5] box the optimiser worked inside.
+        """
         data = [record("A", "X", "positive", 8), record("B", "Y", "negative", 4)]
         mock_min.return_value = solution(
             2, 2, n_dimensions=2,
             x=np.random.default_rng(0).uniform(-5, 5, n_params(2, 2, 2)),
         )
         result = fit(data, n_dimensions=2)
-        assert ((result.z.to_numpy() >= -5.0) & (result.z.to_numpy() <= 5.0)).all()
-        assert ((result.a.to_numpy() >= -5.0) & (result.a.to_numpy() <= 5.0)).all()
-        assert ((result.b.to_numpy() >= -5.0) & (result.b.to_numpy() <= 5.0)).all()
+        # sum(z**2) == 1 bounds every single component by 1.
+        assert (np.abs(result.z.to_numpy()) <= 1.0).all()
+        assert result.a.to_numpy().shape == (2, 2)
+
+    @pytest.mark.slow
+    def test_2d_gauge_is_fixed_whatever_the_seed(self):
+        """The reason canonicalization exists.
+
+        Before it, the orientation was whatever the optimiser happened to land
+        on: the same data fitted with three seeds gave corr(z1, z2) of -0.46,
+        +0.24 and -0.18. Now every run comes back in the same gauge.
+
+        Note this asserts the gauge, not parameter equality: the objective is
+        multimodal and different seeds legitimately reach different optima, so
+        the fitted values themselves are not expected to match.
+        """
+        import sentiment_bias as sb
+
+        rng = np.random.default_rng(0)
+        z = rng.normal(size=(25, 2)) @ np.array([[1.0, 0.8], [0.0, 0.6]])
+        a = rng.normal(size=(5, 2))
+        b = rng.normal(0, 0.1, 5)
+        tensor = sb.simulate(z, a, b, n_mentions=400, seed=1)
+
+        for seed in (0, 1, 2):
+            fitted = fit(tensor, n_dimensions=2, n_restarts=12, seed=seed).z.to_numpy()
+            gram = fitted.T @ fitted
+            assert np.corrcoef(fitted.T)[0, 1] == pytest.approx(0.0, abs=1e-9)
+            assert abs(gram[0, 1]) == pytest.approx(0.0, abs=1e-12)
+            assert gram[0, 0] >= gram[1, 1]
+            assert (fitted ** 2).sum() == pytest.approx(1.0)
+            np.testing.assert_allclose(fitted.sum(axis=0), [0.0, 0.0], atol=1e-10)
 
 
 # ---------------------------------------------------------------------------

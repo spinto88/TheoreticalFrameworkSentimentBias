@@ -45,7 +45,7 @@ __all__ = [
     "negative_log_likelihood",
     "grad_negative_log_likelihood",
     "bic",
-    "canonicalize_1d",
+    "canonicalize",
 ]
 
 
@@ -114,18 +114,23 @@ def log_likelihood(
     x: NDArray[np.float64],
     counts: NDArray[np.int_],
     n_dimensions: int = 1,
+    *,
+    penalized: bool = True,
 ) -> float:
-    """Compute the penalised log-likelihood of the bias model.
-
-    A Gaussian (L2) penalty is applied to every scalar parameter.
+    """Compute the log-likelihood of the bias model.
 
     Args:
         x: Flat parameter vector of length ``(m + k) * D + k``.
         counts: Mention counts, shape ``(m, k, 3)``.
         n_dimensions: Number of latent dimensions D (default 1).
+        penalized: Whether to subtract the Gaussian (L2) penalty on every
+            scalar parameter. The unpenalised value depends on the
+            parameters only through ``q``, which makes it invariant under
+            every reparametrisation the model admits — including
+            :func:`canonicalize`.
 
     Returns:
-        The penalised log-likelihood value (higher is better).
+        The log-likelihood value (higher is better).
     """
     n_rows, n_cols = counts.shape[0], counts.shape[1]
     z, a, b = unpack(x, n_rows, n_cols, n_dimensions)
@@ -140,9 +145,10 @@ def log_likelihood(
                 - N_ij * np.log(np.exp(q_ij) + 1 + np.exp(-q_ij))
             )
 
-    logl -= 0.5 * float(np.sum(z ** 2))
-    logl -= 0.5 * float(np.sum(a ** 2))
-    logl -= 0.5 * float(np.sum(b ** 2))
+    if penalized:
+        logl -= 0.5 * float(np.sum(z ** 2))
+        logl -= 0.5 * float(np.sum(a ** 2))
+        logl -= 0.5 * float(np.sum(b ** 2))
 
     return logl
 
@@ -233,64 +239,90 @@ def bic(neg_log_likelihood: float, n_parameters: int, n_observations: int) -> fl
     return 2 * neg_log_likelihood + n_parameters * np.log(n_observations)
 
 
-def canonicalize_1d(
+def canonicalize(
     z: NDArray[np.float64],
     a: NDArray[np.float64],
     b: NDArray[np.float64],
     sign_reference_idx: int = 0,
     sign_reference_positive: bool = True,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
-    """Standardize 1-D outlet bias to zero sum / unit sum of squares.
+    """Put the fitted parameters in a canonical gauge, for any D.
 
-    The likelihood is invariant under ``z -> (z - c) / s``,
-    ``a -> a * s``, ``b -> b + c * a`` for any ``c``/``s``, so the raw
-    optimizer output has no fixed scale or sign. This picks the
-    representative with ``sum(z) == 0`` and ``sum(z**2) == 1`` (absorbing
-    the rescaling into ``a`` and the mean shift into ``b`` so that
-    ``q_ij = dot(z, a) + b`` is unchanged), then flips the sign of
-    ``z`` and ``a`` if needed so that ``z[sign_reference_idx]`` has the
-    requested sign.
+    The likelihood is invariant under the whole affine group
+    ``z -> A(z - c)``, ``a -> A^-T a``, ``b -> b + c.a`` for any
+    invertible ``A``, so the raw optimizer output has no fixed location,
+    scale, orientation or sign. The L2 penalty removes most of that
+    freedom but is itself invariant under orthogonal ``A``, leaving
+    exactly ``O(D)`` — rotations and reflections — undetermined. This
+    picks one representative, leaving every ``q_ij`` unchanged:
 
-    Note this is unit *norm*, not unit variance: the two differ by a
-    factor of ``sqrt(m)``, and with zero mean they are mutually
-    exclusive, since ``sum(z**2) == m * var(z)``. Under this convention
-    ``var(z) == 1 / m``, and ``a`` is correspondingly ``sqrt(m)`` times
-    larger than it would be under unit variance.
+    1. ``sum(z) == 0`` along each dimension, the shift absorbed into ``b``.
+    2. ``z`` rotated to its principal axes, so ``z.T @ z`` is diagonal with
+       entries in decreasing order. Without this the orientation is
+       arbitrary and a rerun from a different seed returns a different one.
+    3. ``sum(z**2) == 1`` summed over all dimensions, via a single global
+       factor absorbed into ``a``. Deliberately not one factor per column:
+       the ratios between the eigenvalues of ``z.T @ z`` are rotation
+       invariant, hence identified, and say how much each dimension
+       carries — rescaling columns separately would destroy them.
+    4. Reflections fixed one dimension at a time. Dimension 1 follows
+       ``sign_reference_idx``; the rest put their largest-magnitude
+       component positive, since the reference outlet may sit near zero
+       on the higher dimensions.
 
-    This runs *after* the optimisation, so it is purely a change of
-    representation: the box constraints apply to the raw parameter
-    vector, and the canonicalized ``a`` returned here is not bounded
-    by them.
+    Note step 3 is unit *norm*, not unit variance: with zero mean the two
+    are mutually exclusive, since ``sum(z**2) == m * var(z)``. For D=1
+    that means ``var(z) == 1 / m`` and ``a`` is ``sqrt(m)`` times larger
+    than it would be under unit variance.
+
+    Two caveats worth knowing:
+
+    - This runs *after* the optimisation, so it is purely a change of
+      representation. The box constraints apply to the raw parameter
+      vector, and the ``a`` returned here is not bounded by them. It also
+      means the result is no longer at the penalised optimum, so
+      :func:`negative_log_likelihood` evaluated here exceeds the
+      optimiser's final value; the unpenalised likelihood is unchanged.
+    - When two singular values of ``z`` coincide the rotation is not
+      unique, and the result stops being deterministic within that
+      subspace.
 
     Args:
-        z: Estimated bias scores, shape ``(m, 1)``.
-        a: Estimated discrimination parameters, shape ``(k, 1)``.
+        z: Estimated bias scores, shape ``(m, D)``.
+        a: Estimated discrimination parameters, shape ``(k, D)``.
         b: Estimated baseline sentiment parameters, shape ``(k,)``.
-        sign_reference_idx: Index of the outlet whose sign after
-            standardization determines the overall sign convention.
-        sign_reference_positive: If True, the reference outlet's ``z``
-            is made positive; if False, negative.
+        sign_reference_idx: Index of the outlet whose sign on dimension 1
+            determines that dimension's sign convention.
+        sign_reference_positive: If True, the reference outlet's first
+            component is made positive; if False, negative.
 
     Returns:
-        The canonicalized ``(z, a, b)``, with ``z`` and ``a`` still
-        shaped ``(m, 1)`` / ``(k, 1)``.
+        The canonicalized ``(z, a, b)``, shaped as the inputs.
     """
-    z_flat = z[:, 0]
-    a_flat = a[:, 0]
+    centre = z.mean(axis=0)
+    z_new = z - centre
+    b_new = b + a @ centre
 
-    z_mean = z_flat.mean()
-    z_centred = z_flat - z_mean
-    scale = float(np.sqrt(np.sum(z_centred ** 2)))
+    scale = float(np.linalg.norm(z_new))
     if scale == 0:
         return z, a, b  # degenerate: all outlets identical (or a single outlet)
 
-    z_new = z_centred / scale
-    a_new = a_flat * scale
-    b_new = b + z_mean * a_flat
+    # Rotate onto the principal axes of z. numpy orders the singular values
+    # decreasingly, so dimension 1 is the one carrying the most variation.
+    rotation = np.linalg.svd(z_new, full_matrices=False)[2].T
+    z_new = z_new @ rotation
+    a_new = (a @ rotation) * scale
+    z_new = z_new / scale
 
-    ref = z_new[sign_reference_idx]
-    flip = (sign_reference_positive and ref < 0) or (not sign_reference_positive and ref > 0)
-    if flip:
-        z_new, a_new = -z_new, -a_new
+    for d in range(z_new.shape[1]):
+        column = z_new[:, d]
+        if d == 0:
+            reference = column[sign_reference_idx]
+            flip = reference < 0 if sign_reference_positive else reference > 0
+        else:
+            flip = column[np.argmax(np.abs(column))] < 0
+        if flip:
+            z_new[:, d] = -column
+            a_new[:, d] = -a_new[:, d]
 
-    return z_new.reshape(-1, 1), a_new.reshape(-1, 1), b_new
+    return z_new, a_new, b_new

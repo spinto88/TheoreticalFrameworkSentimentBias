@@ -22,6 +22,7 @@ def make_fit(
     subjects: list[str],
     *,
     loss: float = 1.0,
+    log_likelihood: float | None = None,
     bic: float = 2.0,
     n_restarts: int = 1,
     converged: bool = True,
@@ -37,6 +38,7 @@ def make_fit(
         a=pd.DataFrame(a, index=pd.Index(subjects, name="subject"), columns=columns),
         b=pd.Series(b, index=pd.Index(subjects, name="subject"), name="b"),
         loss=loss,
+        log_likelihood=-loss if log_likelihood is None else log_likelihood,
         bic=bic,
         n_dimensions=n_dimensions,
         n_restarts=n_restarts,
@@ -321,3 +323,61 @@ class TestLosses:
             n_restarts=3, losses=[9.0, 2.0, 5.0], loss=2.0,
         )
         assert fit.loss == pytest.approx(min(fit.losses))
+
+
+# ---------------------------------------------------------------------------
+# log_likelihood
+# ---------------------------------------------------------------------------
+
+class TestLogLikelihood:
+    """Unlike loss, this one corresponds to the parameters actually reported."""
+
+    def test_is_carried_through(self):
+        fit = make_fit(
+            np.zeros((1, 1)), np.zeros((1, 1)), np.zeros(1), ["A"], ["X"],
+            loss=5.0, log_likelihood=-4.25,
+        )
+        assert fit.log_likelihood == pytest.approx(-4.25)
+
+    @pytest.mark.slow
+    def test_matches_a_recomputation_from_the_reported_parameters(self):
+        """The whole point: loss cannot be reproduced from z/a/b, this can."""
+        import sentiment_bias as sb
+        from sentiment_bias import model
+
+        tensor = sb.simulate(
+            np.linspace(-1.5, 1.5, 12), np.array([1.0, -0.6]), np.array([0.1, -0.1]),
+            n_mentions=200, seed=4,
+        )
+        fit = sb.fit(tensor, n_dimensions=1, n_restarts=4, seed=0)
+        recomputed = model.log_likelihood(
+            model.pack(fit.z.to_numpy(), fit.a.to_numpy(), fit.b.to_numpy()),
+            tensor.counts, 1, penalized=False,
+        )
+        assert fit.log_likelihood == pytest.approx(recomputed)
+
+        # loss, by contrast, is evaluated at the optimiser's point.
+        penalised_here = model.negative_log_likelihood(fit.x, tensor.counts, 1)
+        assert penalised_here > fit.loss
+
+    @pytest.mark.slow
+    def test_is_invariant_under_rotation(self):
+        import sentiment_bias as sb
+        from sentiment_bias import model
+
+        rng = np.random.default_rng(0)
+        z = rng.normal(size=(15, 2))
+        a = rng.normal(size=(4, 2))
+        b = rng.normal(0, 0.1, 4)
+        tensor = sb.simulate(z, a, b, n_mentions=200, seed=2)
+        fit = sb.fit(tensor, n_dimensions=2, n_restarts=4, seed=0)
+
+        angle = 0.9
+        cos, sin = np.cos(angle), np.sin(angle)
+        rotation = np.array([[cos, -sin], [sin, cos]])
+        rotated = model.pack(
+            fit.z.to_numpy() @ rotation.T, fit.a.to_numpy() @ rotation.T, fit.b.to_numpy()
+        )
+        assert model.log_likelihood(
+            rotated, tensor.counts, 2, penalized=False
+        ) == pytest.approx(fit.log_likelihood)
