@@ -50,17 +50,33 @@ q_ij = dot(z[i], a[j]) + b[j]
 
 Mention counts per (outlet, subject) follow a 3-category multinomial (negative/neutral/positive) parameterised by `q_ij`. `D=1` recovers the original scalar model; `n_dimensions` is validated to `[1, 2]` in `AnalysisInput` (the HTTP boundary only — `fit` itself accepts any D ≥ 1).
 
-This module is pure NumPy, with no pandas, Pydantic or I/O: it is the only file that must be read to verify the mathematics. It holds `log_likelihood` / `negative_log_likelihood` / `grad_negative_log_likelihood` (objective and analytical gradient over the flat parameter vector `x`, laid out as `[z (m*D), a (k*D), b (k)]`), `pack`/`unpack`/`log_odds` (parameter algebra), `bic`, and `canonicalize_1d`.
+This module is pure NumPy, with no pandas, Pydantic or I/O: it is the only file that must be read to verify the mathematics. It holds `log_likelihood` / `negative_log_likelihood` / `grad_negative_log_likelihood` (objective and analytical gradient over the flat parameter vector `x`, laid out as `[z (m*D), a (k*D), b (k)]`), `pack`/`unpack`/`log_odds` (parameter algebra), `bic`, and `canonicalize`.
+
+`log_likelihood` takes `penalized=False` to return the data term alone. That value depends on the parameters only through `q`, which makes it invariant under every reparametrisation the model admits — it is what `BiasFit.log_likelihood` stores.
 
 `bic` is an approximation: it treats the L2 penalty's effect on the log-posterior as negligible. Lower is better, as for raw loss.
+
+### Identifiability — the thing to understand before touching the model
+
+The likelihood is invariant under the whole affine group `z → A(z−c)`, `a → A⁻ᵀa`, `b → b + cᵀa` for invertible `A`: that is `D²+D` free parameters. The L2 penalty is not invariant under a general `A` and kills most of it, but it **is** invariant under orthogonal `A`. So what remains undetermined is exactly **`O(D)`** — rotations and reflections. `D=1` leaves the sign; `D=2` leaves a rotation plus reflections.
+
+Consequences that keep coming up:
+
+- **The correlation between latent dimensions is not a fact about the data.** The same counts are produced, byte for byte, by a parametrisation with `corr(z₁,z₂) = +0.914` and by its orthogonal rotation with `corr = 0`. Never report the orthogonality of the canonicalized output as a finding. Regularisation is not the obstacle — it is what narrows the ambiguity from `D²+D` to `O(D)`.
+- **What is identified in `D > 1`:** the eigenvalues of `zᵀz`, the subspace `z` spans, and every `q_ij`.
+- **Across two separate fits, `z` magnitudes are not comparable** — the gauge is computed from whichever outlets are present. Rankings survive; use `log_odds()` for anything else. The README's "Comparing two fits" section has the measured numbers.
 
 ### The rest of the core
 
 - `data.py` — `MentionTensor` (a frozen dataclass wrapping an `(m, k, 3)` int array plus sorted outlet/subject name lists; **the sorting determines index order everywhere downstream**), the `from_wide` / `from_long` / `from_records` / `from_array` constructors, the `to_tensor` dispatcher, and `read_csv` / `read_json`. This is the only module that knows about DataFrame column names. Duplicate `(outlet, subject, mention_type)` rows are summed; missing pairs become zeros.
 - `results.py` — `BiasFit`, the frozen dataclass returned by `fit`. `z` and `a` are DataFrames indexed by name with one column per dimension (`dim_1`, …); `b` is a Series, not a frame, since there is genuinely one scalar per subject. Also carries `losses` (one per restart, which reveals a multimodal objective), `converged`, `data` (the fitted tensor) and `x`.
-- `estimate.py` — `fit`, which orchestrates `to_tensor` → `minimize` (L-BFGS-B with analytical gradient, box constraints `[-5, 5]`) over `n_restarts` random initialisations → `canonicalize_1d` when `n_dimensions == 1` → `bic` → `BiasFit`. Takes `seed` so restarts are reproducible.
 
-The `D=1` canonicalization convention is **unit norm**: `sum(z) == 0` and `sum(z**2) == 1`, which means `var(z) == 1/m` (not 1 — with zero mean the two normalisations are mutually exclusive, differing by `sqrt(m)`). It runs *after* the optimisation, so it is purely presentational: the box constraints bound the raw parameter vector, and the reported `a` — `sqrt(m)` times larger than under unit variance — is not bounded by them. `D > 1` output is not canonicalized at all: no centring, scaling, sign or rotation convention.
+  Three numbers that are easy to confuse: `loss` is the negative **penalised** log-likelihood at the optimiser's solution, `log_likelihood` is the **unpenalised** one, and `bic` is derived from `loss`. Only `log_likelihood` can be recomputed from the reported `z`/`a`/`b`, because canonicalization moves the parameters off the penalised optimum (by ~26 in 1D and ~219 in 2D on test data — all of it the penalty term, the data term is untouched).
+- `estimate.py` — `fit`, which orchestrates `to_tensor` → `minimize` (L-BFGS-B with analytical gradient, box constraints `[-5, 5]`) over `n_restarts` random initialisations → `canonicalize` → `bic` → `BiasFit`. Takes `seed` so restarts are reproducible.
+
+The canonicalization convention, applied at **every** `D`: `sum(z) == 0` per dimension, `z` rotated to its principal axes (`zᵀz` diagonal, decreasing), `sum(z**2) == 1` globally, reflections fixed — dimension 1 by `sign_reference_outlet`, the rest by their largest-magnitude component. The scale is one global factor, never one per column: the eigenvalue ratios of `zᵀz` are identified and would be destroyed by per-column normalisation.
+
+It is unit **norm**, not unit variance (`var(z) == 1/m`; with zero mean the two are mutually exclusive, differing by `sqrt(m)`). It runs *after* the optimisation, so it is purely presentational: the box constraints bound the raw parameter vector, not the reported `a`.
 - `simulate.py` — the generative direction, as first-class as `fit`: `simulate(z, a, b, ...)` samples counts from known parameters, and `thin(tensor, fraction)` subsamples a tensor to a fraction of its mentions via a multivariate hypergeometric. `n_mentions` accepts a fixed `int`, `"poisson"` (with `mean_mentions`), or an explicit `(m, k)` array.
 
 ### API (`src/sentiment_bias/api/`)
