@@ -74,13 +74,21 @@ function renderAllCharts(data) {
   );
 }
 
-// Maps a point (x,y) in [-2,2]² to a color that fades from neutral gray
+// Half-width of the square scatter domain: big enough to hold every point,
+// with a floor so small fits still get a sensible frame. D>1 output is not
+// canonicalized, so `a` regularly runs past the old hardcoded 2 and those
+// subjects used to be clipped out of the plot entirely.
+function scatterLimit(vecs) {
+  const peak = Math.max(...vecs.flatMap(v => [Math.abs(v[0]), Math.abs(v[1])]));
+  return Math.max(2, Math.ceil(peak * 10) / 10 * 1.05);
+}
+
+// Maps a point (x,y) in [-limit,limit]² to a color that fades from neutral gray
 // at the origin toward a distinct vertex color as it approaches each quadrant corner.
 // Q1(+,+)=red  Q2(-,+)=indigo  Q3(-,-)=teal  Q4(+,-)=amber
-function quadrantColor(x, y, alpha) {
-  const LIMIT = 2;
-  const nx = x / LIMIT;
-  const ny = y / LIMIT;
+function quadrantColor(x, y, alpha, limit = 2) {
+  const nx = x / limit;
+  const ny = y / limit;
 
   const vertices = [
     { vx:  1, vy:  1, r: 239, g:  68, b:  68 },
@@ -109,11 +117,13 @@ function quadrantColor(x, y, alpha) {
 function createScatterChart(canvasId, chartRef, outletNames, zVecs, subjectNames, aVecs) {
   if (chartRef) chartRef.destroy();
 
+  const limit = scatterLimit([...zVecs, ...aVecs]);
+
   const outletDataset = {
     label: "Outlets (z)",
     data: outletNames.map((name, i) => ({ x: zVecs[i][0], y: zVecs[i][1], name })),
-    backgroundColor: zVecs.map(z => quadrantColor(z[0], z[1], 0.80)),
-    borderColor:     zVecs.map(z => quadrantColor(z[0], z[1], 1.00)),
+    backgroundColor: zVecs.map(z => quadrantColor(z[0], z[1], 0.80, limit)),
+    borderColor:     zVecs.map(z => quadrantColor(z[0], z[1], 1.00, limit)),
     borderWidth: 1.5,
     pointStyle: "circle",
     pointRadius: 9,
@@ -123,8 +133,8 @@ function createScatterChart(canvasId, chartRef, outletNames, zVecs, subjectNames
   const subjectDataset = {
     label: "Subjects (a)",
     data: subjectNames.map((name, i) => ({ x: aVecs[i][0], y: aVecs[i][1], name })),
-    backgroundColor: aVecs.map(a => quadrantColor(a[0], a[1], 0.80)),
-    borderColor:     aVecs.map(a => quadrantColor(a[0], a[1], 1.00)),
+    backgroundColor: aVecs.map(a => quadrantColor(a[0], a[1], 0.80, limit)),
+    borderColor:     aVecs.map(a => quadrantColor(a[0], a[1], 1.00, limit)),
     borderWidth: 1.5,
     pointStyle: "rect",
     pointRadius: 9,
@@ -178,16 +188,16 @@ function createScatterChart(canvasId, chartRef, outletNames, zVecs, subjectNames
           grid:  { color: "rgba(0,0,0,0.06)" },
           border: { color: "#d1d5db" },
           ticks: { color: "#4b5563", font: { size: 13 } },
-          min: -2.0,
-          max:  2.0,
+          min: -limit,
+          max:  limit,
         },
         y: {
           title: { ...axisTitleStyle, text: "Dimension 2" },
           grid:  { color: "rgba(0,0,0,0.06)" },
           border: { color: "#d1d5db" },
           ticks: { color: "#4b5563", font: { size: 13 } },
-          min: -2.0,
-          max:  2.0,
+          min: -limit,
+          max:  limit,
         }
       }
     }

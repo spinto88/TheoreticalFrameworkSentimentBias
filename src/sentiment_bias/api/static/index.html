@@ -8,6 +8,11 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* Layout here is inline `display:flex`, which outranks the UA rule behind
+       the `hidden` attribute. Without this, toggling `.hidden` from JS does
+       nothing. */
+    [hidden] { display: none !important; }
+
     :root {
       --bg:        #0f1117;
       --surface:   #1a1d27;
